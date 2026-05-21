@@ -1,12 +1,33 @@
 "use client";
 
 import { Reveal } from "@/components/motion/Reveal";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { btn, input, section } from "@/lib/styles";
+import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { Mail, MapPin, Phone, Send } from "lucide-react";
 import { FormEvent, useState } from "react";
 
+const contactItems = [
+  { icon: MapPin, text: "1200 Nova Drive, Austin, TX 78701" },
+  { icon: Phone, text: "(512) 555-0142", href: "tel:+15125550142" },
+  {
+    icon: Mail,
+    text: "admissions@novaacademy.edu",
+    href: "mailto:admissions@novaacademy.edu",
+  },
+];
+
+const fieldClass = (focused: boolean) =>
+  cn(
+    input,
+    "transition-all duration-200",
+    focused && "border-indigo-400 shadow-[0_0_0_3px_rgba(99,102,241,0.15)]"
+  );
+
 export function Contact() {
   const [submitted, setSubmitted] = useState(false);
+  const [focused, setFocused] = useState<string | null>(null);
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -15,43 +36,52 @@ export function Contact() {
   }
 
   return (
-    <section id="contact" className="bg-slate-50 py-24 sm:py-32">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <div className="grid gap-12 lg:grid-cols-2 lg:gap-16">
+    <section id="contact" className={cn(section.wrap, "section-mesh bg-slate-50")}>
+      <div className={section.container}>
+        <div className="grid gap-10 lg:grid-cols-2 lg:gap-16 xl:gap-20">
           <Reveal>
-            <span className="text-sm font-semibold uppercase tracking-wider text-indigo-600">
-              Get in Touch
-            </span>
-            <h2 className="mt-3 font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-              Start your journey with Nova
-            </h2>
-            <p className="mt-4 text-slate-600 leading-relaxed">
-              Schedule a campus tour, request a brochure, or speak with our
-              admissions team. We respond within one business day.
-            </p>
+            <SectionHeader
+              label="Get in Touch"
+              title="Start your journey with Nova"
+              description="Schedule a campus tour, request a brochure, or speak with our admissions team. We respond within one business day."
+            />
 
-            <ul className="mt-8 space-y-4">
-              {[
-                { icon: MapPin, text: "1200 Nova Drive, Austin, TX 78701" },
-                { icon: Phone, text: "(512) 555-0142" },
-                { icon: Mail, text: "admissions@novaacademy.edu" },
-              ].map((item) => (
-                <li key={item.text} className="flex items-center gap-3 text-slate-600">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+            <ul className="mt-8 space-y-3 sm:mt-10">
+              {contactItems.map((item) => (
+                <motion.li
+                  key={item.text}
+                  whileHover={{ x: 4 }}
+                  className="flex items-center gap-4 rounded-xl border border-transparent p-2 transition-colors hover:border-indigo-100 hover:bg-white/60"
+                >
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-md shadow-indigo-500/20">
                     <item.icon className="h-4 w-4" />
                   </span>
-                  {item.text}
-                </li>
+                  {item.href ? (
+                    <a
+                      href={item.href}
+                      className="text-sm text-slate-600 transition hover:text-indigo-600 sm:text-base"
+                    >
+                      {item.text}
+                    </a>
+                  ) : (
+                    <span className="text-sm text-slate-600 sm:text-base">
+                      {item.text}
+                    </span>
+                  )}
+                </motion.li>
               ))}
             </ul>
           </Reveal>
 
-          <Reveal delay={0.12}>
+          <Reveal delay={0.1}>
             <motion.form
               onSubmit={handleSubmit}
-              className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-xl shadow-slate-200/50 sm:p-8"
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="glass-card glow-ring rounded-3xl p-6 sm:p-8 lg:p-10"
             >
-              <h3 className="text-lg font-semibold text-slate-900">
+              <h3 className="text-lg font-semibold text-slate-900 sm:text-xl">
                 Request Information
               </h3>
               <p className="mt-1 text-sm text-slate-500">
@@ -59,30 +89,25 @@ export function Contact() {
               </p>
 
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    First Name
-                  </span>
-                  <input
-                    required
-                    type="text"
-                    name="firstName"
-                    placeholder="Jane"
-                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    Last Name
-                  </span>
-                  <input
-                    required
-                    type="text"
-                    name="lastName"
-                    placeholder="Smith"
-                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"
-                  />
-                </label>
+                {[
+                  { name: "firstName", label: "First Name", placeholder: "Jane" },
+                  { name: "lastName", label: "Last Name", placeholder: "Smith" },
+                ].map((field) => (
+                  <label key={field.name} className="block">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      {field.label}
+                    </span>
+                    <input
+                      required
+                      type="text"
+                      name={field.name}
+                      placeholder={field.placeholder}
+                      onFocus={() => setFocused(field.name)}
+                      onBlur={() => setFocused(null)}
+                      className={fieldClass(focused === field.name)}
+                    />
+                  </label>
+                ))}
               </div>
 
               <label className="mt-4 block">
@@ -94,7 +119,9 @@ export function Contact() {
                   type="email"
                   name="email"
                   placeholder="jane@email.com"
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"
+                  onFocus={() => setFocused("email")}
+                  onBlur={() => setFocused(null)}
+                  className={fieldClass(focused === "email")}
                 />
               </label>
 
@@ -105,7 +132,9 @@ export function Contact() {
                 <select
                   required
                   name="grade"
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"
+                  onFocus={() => setFocused("grade")}
+                  onBlur={() => setFocused(null)}
+                  className={fieldClass(focused === "grade")}
                   defaultValue=""
                 >
                   <option value="" disabled>
@@ -126,13 +155,18 @@ export function Contact() {
                   name="message"
                   rows={4}
                   placeholder="Tell us about your student..."
-                  className="mt-1.5 w-full resize-none rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20"
+                  onFocus={() => setFocused("message")}
+                  onBlur={() => setFocused(null)}
+                  className={cn(fieldClass(focused === "message"), "resize-none")}
                 />
               </label>
 
-              <button
+              <motion.button
                 type="submit"
-                className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 py-3.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition hover:brightness-110"
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.98 }}
+                disabled={submitted}
+                className={cn(btn.primary, "mt-6 w-full disabled:opacity-80")}
               >
                 {submitted ? (
                   "Message sent — thank you!"
@@ -142,7 +176,7 @@ export function Contact() {
                     <Send className="h-4 w-4" />
                   </>
                 )}
-              </button>
+              </motion.button>
             </motion.form>
           </Reveal>
         </div>
