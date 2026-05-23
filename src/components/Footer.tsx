@@ -9,6 +9,7 @@ import { FormEvent, useState } from "react";
 const footerLinks = {
   School: [
     { label: "About", href: "#about" },
+    { label: "Why Choose Us", href: "#why-us" },
     { label: "Courses", href: "#courses" },
     { label: "Faculty", href: "#faculty" },
     { label: "Gallery", href: "#gallery" },
@@ -44,9 +45,9 @@ export function Footer() {
   }
 
   return (
-    <footer className="relative overflow-hidden border-t border-white/10 bg-slate-950 text-slate-300">
+    <footer className="relative overflow-hidden border-t border-white/10 bg-navy-950 text-slate-200">
       <div
-        className="absolute inset-0 bg-gradient-to-br from-slate-950 via-indigo-950/80 to-slate-900"
+        className="absolute inset-0 bg-gradient-to-br from-navy-950 via-navy-900 to-navy-800"
         aria-hidden
       />
       <div className="mesh-gradient absolute inset-0 opacity-30" aria-hidden />
@@ -59,14 +60,14 @@ export function Footer() {
               whileHover={{ scale: 1.02 }}
               className="inline-flex items-center gap-2.5"
             >
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/30">
-                <GraduationCap className="h-5 w-5" />
+              <span className="icon-brand flex h-12 w-12 items-center justify-center rounded-2xl shadow-elevated-lg">
+                <GraduationCap className="h-6 w-6" />
               </span>
-              <span className="font-[family-name:var(--font-display)] text-lg font-semibold text-white">
-                Nova <span className="text-indigo-400">Academy</span>
+              <span className="font-heading text-xl font-bold text-white">
+                Nova <span className="text-gold-400">Academy</span>
               </span>
             </motion.a>
-            <p className="mt-4 max-w-sm text-sm leading-relaxed text-slate-400">
+            <p className="text-on-dark-muted mt-5 max-w-sm text-sm leading-[1.7]">
               Shaping future-ready leaders through excellence in education,
               innovation, and community since 1992.
             </p>
@@ -79,7 +80,7 @@ export function Footer() {
                   aria-label={s.label}
                   whileHover={{ y: -3, scale: 1.08 }}
                   whileTap={{ scale: 0.95 }}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 backdrop-blur-sm transition-colors hover:border-indigo-400/40 hover:bg-indigo-500/20 hover:text-white"
+                  className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-blue-100/80 shadow-elevated backdrop-blur-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-gold-400/40 hover:bg-gold-500/15 hover:text-gold-300 hover:shadow-elevated-lg"
                 >
                   <s.icon className="h-4 w-4" />
                 </motion.a>
@@ -89,7 +90,7 @@ export function Footer() {
             <motion.a
               href="#contact"
               whileHover={{ y: -2 }}
-              className={cn(btn.primary, "mt-6 hidden sm:inline-flex")}
+              className={cn(btn.accent, "mt-6 hidden sm:inline-flex")}
             >
               Apply Now
             </motion.a>
@@ -97,7 +98,7 @@ export function Footer() {
 
           {Object.entries(footerLinks).map(([title, links]) => (
             <div key={title}>
-              <h4 className="text-sm font-semibold uppercase tracking-wider text-white">
+              <h4 className="font-heading text-sm font-bold uppercase tracking-wider text-white">
                 {title}
               </h4>
               <ul className="mt-4 space-y-2.5">
@@ -106,7 +107,7 @@ export function Footer() {
                     <motion.a
                       href={link.href}
                       whileHover={{ x: 3 }}
-                      className="inline-block text-sm text-slate-400 transition-colors hover:text-indigo-300"
+                      className="inline-block text-sm text-slate-300 transition-colors hover:text-gold-300"
                     >
                       {link.label}
                     </motion.a>
@@ -117,10 +118,10 @@ export function Footer() {
           ))}
 
           <div className="sm:col-span-2 lg:col-span-2">
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-white">
+            <h4 className="font-heading text-sm font-bold uppercase tracking-wider text-white">
               Stay Updated
             </h4>
-            <p className="mt-2 text-sm text-slate-400">
+            <p className="text-on-dark-muted mt-2 text-sm">
               Get news and events in your inbox.
             </p>
             <form
@@ -134,14 +135,14 @@ export function Footer() {
                 aria-label="Email for newsletter"
                 className={cn(
                   input,
-                  "mt-0 border-white/15 bg-white/5 text-white placeholder:text-slate-500 focus:border-indigo-400 focus:bg-white/10"
+                  "mt-0 border-white/15 bg-white/5 text-white placeholder:text-blue-200/40 focus:border-gold-400/50 focus:bg-white/10"
                 )}
               />
               <motion.button
                 type="submit"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className="shrink-0 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25"
+                className={cn(btn.primary, "shrink-0 px-5 py-3 text-sm")}
               >
                 {subscribed ? "Done!" : "Subscribe"}
               </motion.button>
@@ -150,7 +151,10 @@ export function Footer() {
         </div>
 
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-8 sm:flex-row">
-          <p className="text-sm text-slate-500">
+          <p
+            suppressHydrationWarning
+            className="text-on-dark-muted text-sm"
+          >
             © {new Date().getFullYear()} Nova Academy. All rights reserved.
           </p>
           <div className="flex flex-wrap justify-center gap-6 text-sm">
@@ -159,7 +163,7 @@ export function Footer() {
                 key={item}
                 href="#"
                 whileHover={{ y: -1 }}
-                className="text-slate-500 transition hover:text-indigo-300"
+                className="text-slate-300 transition hover:text-gold-300"
               >
                 {item}
               </motion.a>

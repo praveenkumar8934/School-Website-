@@ -7,6 +7,7 @@ import { MobileMenu } from "@/components/nav/MobileMenu";
 import { NavLink } from "@/components/nav/NavLink";
 import { useScrollSpy } from "@/hooks/useScrollSpy";
 import { NAV_LINKS, NAV_SECTION_IDS } from "@/lib/nav-config";
+import { btn } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 
 export function Navbar() {
@@ -28,12 +29,14 @@ export function Navbar() {
       <header className="fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-5 sm:pt-4">
         <motion.nav
           layout
+          role="navigation"
+          aria-label="Main navigation"
           transition={{ type: "spring", stiffness: 260, damping: 28 }}
           className={cn(
             "mx-auto flex max-w-6xl items-center justify-between gap-4 rounded-2xl border px-4 py-2.5 transition-[background,box-shadow,border-color,padding] duration-300 sm:px-5 sm:py-3",
             scrolled
-              ? "glass border-white/70 shadow-lg shadow-indigo-500/10"
-              : "glass-hero border-white/15 bg-transparent shadow-none"
+              ? "glass border-border shadow-elevated"
+              : "glass-hero border-white/15 shadow-none"
           )}
         >
           <motion.a
@@ -43,17 +46,17 @@ export function Navbar() {
             whileTap={{ scale: 0.98 }}
             className="flex shrink-0 items-center gap-2.5"
           >
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/30 transition-shadow duration-300 hover:shadow-indigo-500/45">
+            <span className="icon-brand flex h-10 w-10 items-center justify-center rounded-xl">
               <GraduationCap className="h-5 w-5" />
             </span>
             <span
               className={cn(
-                "font-[family-name:var(--font-display)] text-base font-semibold tracking-tight transition-colors duration-300 sm:text-lg",
-                scrolled ? "text-slate-900" : "text-white"
+                "font-heading text-base font-bold tracking-tight transition-colors duration-300 sm:text-lg",
+                scrolled ? "text-navy-900" : "text-white"
               )}
             >
               Nova{" "}
-              <span className={scrolled ? "text-indigo-600" : "text-indigo-200"}>
+              <span className={scrolled ? "text-blue-600" : "text-gold-300"}>
                 Academy
               </span>
             </span>
@@ -79,8 +82,8 @@ export function Navbar() {
               className={cn(
                 "rounded-full px-4 py-2 text-sm font-medium transition-colors duration-200",
                 scrolled
-                  ? "text-slate-600 hover:text-indigo-600"
-                  : "text-white/90 hover:text-white"
+                  ? "text-foreground-muted hover:text-blue-600"
+                  : "text-white/90 hover:text-gold-300"
               )}
             >
               Log in
@@ -89,7 +92,7 @@ export function Navbar() {
               href="#contact"
               whileHover={{ scale: 1.03, y: -1 }}
               whileTap={{ scale: 0.97 }}
-              className="rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-shadow duration-300 hover:shadow-indigo-500/40"
+              className={cn(btn.accent, "px-5 py-2.5 text-sm")}
             >
               Apply Now
             </motion.a>
@@ -99,13 +102,14 @@ export function Navbar() {
             type="button"
             whileTap={{ scale: 0.92 }}
             className={cn(
-              "relative flex h-10 w-10 items-center justify-center rounded-xl transition-colors md:hidden",
+              "relative flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-xl transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 md:hidden",
               scrolled
-                ? "bg-slate-100 text-slate-700 hover:bg-indigo-50 hover:text-indigo-600"
+                ? "bg-blue-50 text-navy-800 hover:bg-blue-100 hover:text-blue-600"
                 : "bg-white/15 text-white backdrop-blur-md hover:bg-white/25"
             )}
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
+            aria-controls="mobile-menu"
             aria-label={open ? "Close menu" : "Open menu"}
           >
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}

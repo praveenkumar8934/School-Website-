@@ -29,14 +29,14 @@ export function NavLink({
         className={cn(
           "relative flex items-center rounded-xl px-4 py-3 text-base font-medium transition-colors",
           active
-            ? "bg-indigo-50 text-indigo-700"
-            : "text-slate-700 hover:bg-slate-50 hover:text-indigo-600"
+            ? "bg-blue-50 text-blue-700"
+            : "text-navy-800 hover:bg-background-muted hover:text-blue-600"
         )}
       >
         {active && (
           <motion.span
             layoutId="mobile-nav-active"
-            className="absolute left-0 top-1/2 h-8 w-1 -translate-y-1/2 rounded-full bg-gradient-to-b from-indigo-600 to-violet-600"
+            className="absolute left-0 top-1/2 h-8 w-1 -translate-y-1/2 rounded-full bg-gradient-to-b from-gold-500 to-gold-400"
             transition={{ type: "spring", stiffness: 380, damping: 30 }}
           />
         )}
@@ -50,14 +50,14 @@ export function NavLink({
       href={link.href}
       onClick={onNavigate}
       className={cn(
-        "relative px-1 py-2 text-sm font-medium transition-colors duration-200",
+        "link-underline relative rounded-md px-1 py-2 text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2",
         scrolled
           ? active
-            ? "text-indigo-600"
-            : "text-slate-600 hover:text-indigo-600"
+            ? "text-blue-600"
+            : "text-foreground-muted hover:text-blue-600"
           : active
-            ? "text-white"
-            : "text-white/85 hover:text-white"
+            ? "text-gold-300"
+            : "text-white/90 hover:text-white"
       )}
     >
       {link.label}
@@ -67,8 +67,8 @@ export function NavLink({
           className={cn(
             "absolute -bottom-0.5 left-0 right-0 h-0.5 rounded-full",
             scrolled
-              ? "bg-gradient-to-r from-indigo-600 to-violet-600"
-              : "bg-gradient-to-r from-indigo-200 to-violet-200"
+              ? "bg-gradient-to-r from-blue-600 to-blue-500"
+              : "bg-gradient-to-r from-gold-400 to-gold-300"
           )}
           transition={{ type: "spring", stiffness: 400, damping: 32 }}
         />

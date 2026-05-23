@@ -9,6 +9,7 @@ type SectionHeaderProps = {
   align?: "left" | "center";
   variant?: "light" | "dark";
   className?: string;
+  id?: string;
 };
 
 export function SectionHeader({
@@ -18,32 +19,46 @@ export function SectionHeader({
   align = "left",
   variant = "light",
   className,
+  id,
 }: SectionHeaderProps) {
   const isDark = variant === "dark";
+  const headingId = id ?? "section-heading";
 
   return (
-    <div
+    <header
       className={cn(
         align === "center" && "mx-auto max-w-3xl text-center",
         className
       )}
     >
-      <span className={isDark ? sectionHeader.labelDark : sectionHeader.label}>
+      <span
+        className={cn(
+          isDark ? sectionHeader.labelDark : sectionHeader.label
+        )}
+      >
         {label}
       </span>
-      <h2 className={isDark ? sectionHeader.titleLight : sectionHeader.title}>
+      <h2
+        id={headingId}
+        className={cn(
+          isDark ? sectionHeader.titleLight : sectionHeader.title,
+          isDark && "!text-white",
+          align === "center" && "mx-auto"
+        )}
+      >
         {title}
       </h2>
       {description && (
         <p
           className={cn(
             isDark ? sectionHeader.descLight : sectionHeader.desc,
+            isDark && "text-slate-300",
             align === "center" && "mx-auto"
           )}
         >
           {description}
         </p>
       )}
-    </div>
+    </header>
   );
 }

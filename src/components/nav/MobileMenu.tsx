@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect } from "react";
 import { NavLink } from "@/components/nav/NavLink";
+import { btn } from "@/lib/styles";
 import type { NavLink as NavLinkType } from "@/lib/nav-config";
 
 const menuVariants = {
@@ -68,7 +69,7 @@ export function MobileMenu({
           <motion.button
             type="button"
             aria-label="Close menu"
-            className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-navy-950/55 backdrop-blur-sm"
             onClick={onClose}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -76,18 +77,20 @@ export function MobileMenu({
           />
 
           <motion.aside
+            id="mobile-menu"
             variants={panelVariants}
             initial="closed"
             animate="open"
             exit="closed"
             transition={{ type: "spring", stiffness: 320, damping: 32 }}
-            className="glass absolute right-0 top-0 flex h-full w-[min(320px,88vw)] flex-col border-l border-white/60 shadow-2xl shadow-indigo-500/10"
+            aria-label="Mobile navigation"
+            className="glass absolute right-0 top-0 flex h-full w-[min(320px,88vw)] flex-col border-l border-border shadow-elevated-lg"
           >
-            <div className="border-b border-slate-200/80 px-5 py-5">
-              <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600">
+            <div className="border-b border-border-subtle px-5 py-5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-gold-600">
                 Menu
               </p>
-              <p className="mt-1 font-[family-name:var(--font-display)] text-lg font-semibold text-slate-900">
+              <p className="font-heading mt-1 text-lg font-bold text-navy-900">
                 Nova Academy
               </p>
             </div>
@@ -111,11 +114,11 @@ export function MobileMenu({
               ))}
             </motion.nav>
 
-            <div className="space-y-3 border-t border-slate-200/80 p-4">
+            <div className="space-y-3 border-t border-border-subtle p-4">
               <a
                 href="#contact"
                 onClick={onClose}
-                className="block rounded-xl px-4 py-3 text-center text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-indigo-600"
+                className="flex min-h-[48px] items-center justify-center rounded-xl px-4 py-3 text-center text-sm font-medium text-foreground-muted transition hover:bg-background-muted hover:text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 Log in
               </a>
@@ -124,7 +127,7 @@ export function MobileMenu({
                 onClick={onClose}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className="block rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 py-3.5 text-center text-sm font-semibold text-white shadow-lg shadow-indigo-500/25"
+                className={`${btn.accent} w-full`}
               >
                 Apply Now
               </motion.a>
