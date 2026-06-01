@@ -5,6 +5,12 @@ import { btn } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { motion, type Variants } from "framer-motion";
 import { ArrowRight, Play, Sparkles } from "lucide-react";
+import { useState, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const container: Variants = {
   hidden: { opacity: 0 },
@@ -34,6 +40,24 @@ const floatCard = (delay: number): Variants => ({
 });
 
 export function Hero() {
+  const [admissionsOpen, setAdmissionsOpen] = useState(false);
+  const [academicYear, setAcademicYear] = useState("2026–27");
+
+  useEffect(() => {
+    async function fetchSettings() {
+      try {
+        const { data } = await supabase.from("system_settings").select("admissions_open, current_academic_year").eq("id", 1).single();
+        if (data) {
+          setAdmissionsOpen(data.admissions_open);
+          if (data.current_academic_year) setAcademicYear(data.current_academic_year);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    fetchSettings();
+  }, []);
+
   return (
     <section
       id="home"
@@ -87,13 +111,15 @@ export function Hero() {
           animate="visible"
           className="mx-auto w-full max-w-4xl text-center"
         >
-          <motion.span
-            variants={item}
-            className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white shadow-elevated backdrop-blur-md"
-          >
-            <Sparkles className="h-3.5 w-3.5 text-gold-400" aria-hidden />
-            Admissions Open 2026–27
-          </motion.span>
+          {admissionsOpen && (
+            <motion.span
+              variants={item}
+              className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white shadow-elevated backdrop-blur-md mb-6"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-gold-400" aria-hidden />
+              Admissions Open {academicYear}
+            </motion.span>
+          )}
 
           <motion.h1
             variants={item}
@@ -116,18 +142,20 @@ export function Hero() {
             variants={item}
             className="mt-10 flex flex-col items-stretch justify-center gap-3 sm:mt-12 sm:flex-row sm:items-center sm:justify-center sm:gap-4"
           >
-            <motion.a
-              href="#contact"
-              whileHover={{ scale: 1.04, y: -3 }}
-              whileTap={{ scale: 0.97 }}
-              className={cn(btn.accent, "group w-full px-9 py-4 text-base sm:w-auto")}
-            >
-              Start Application
-              <ArrowRight
-                className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1"
-                aria-hidden
-              />
-            </motion.a>
+            {admissionsOpen && (
+              <motion.a
+                href="/admissions"
+                whileHover={{ scale: 1.04, y: -3 }}
+                whileTap={{ scale: 0.97 }}
+                className={cn(btn.accent, "group w-full px-9 py-4 text-base sm:w-auto")}
+              >
+                Start Application
+                <ArrowRight
+                  className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1"
+                  aria-hidden
+                />
+              </motion.a>
+            )}
             <motion.button
               type="button"
               whileHover={{ scale: 1.02, y: -2 }}

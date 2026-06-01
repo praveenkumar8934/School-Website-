@@ -32,6 +32,7 @@ type MobileMenuProps = {
   onClose: () => void;
   links: NavLinkType[];
   activeSection: string;
+  admissionsOpen?: boolean;
 };
 
 export function MobileMenu({
@@ -39,6 +40,7 @@ export function MobileMenu({
   onClose,
   links,
   activeSection,
+  admissionsOpen = false,
 }: MobileMenuProps) {
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -116,21 +118,23 @@ export function MobileMenu({
 
             <div className="space-y-3 border-t border-border-subtle p-4">
               <a
-                href="#contact"
+                href="/login"
                 onClick={onClose}
                 className="flex min-h-[48px] items-center justify-center rounded-xl px-4 py-3 text-center text-sm font-medium text-foreground-muted transition hover:bg-background-muted hover:text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 Log in
               </a>
-              <motion.a
-                href="#contact"
-                onClick={onClose}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className={`${btn.accent} w-full`}
-              >
-                Apply Now
-              </motion.a>
+              {admissionsOpen && (
+                <motion.a
+                  href="/admissions"
+                  onClick={onClose}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={`${btn.accent} w-full`}
+                >
+                  Apply Now
+                </motion.a>
+              )}
             </div>
           </motion.aside>
         </motion.div>

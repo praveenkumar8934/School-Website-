@@ -517,3 +517,35 @@ h4 {
 .link-underline:hover::after {
   transform: scaleX(1);
 }
+
+/* ─── Browser Autofill & Native Controls High Contrast Overrides ─── */
+
+/* Force Chrome/Edge/Safari Autofill to preserve high readability and contrast in form fields */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--foreground) !important;
+  -webkit-box-shadow: 0 0 0px 1000px var(--card) inset !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Specific autofill override for dark fields on the admissions page */
+.bg-navy-950 input:-webkit-autofill,
+.bg-navy-950 textarea:-webkit-autofill,
+.bg-navy-950 select:-webkit-autofill {
+  -webkit-text-fill-color: #ffffff !important;
+  -webkit-box-shadow: 0 0 0px 1000px #0f172a inset !important;
+}
+
+/* Invert date picker calendar icon to white in dark inputs so it is highly visible */
+.bg-navy-950 input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.2);
+  cursor: pointer;
+}
+

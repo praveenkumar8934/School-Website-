@@ -4,7 +4,12 @@ import { btn, input } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { GraduationCap, Globe, Link2, Mail, Share2 } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const footerLinks = {
   School: [
@@ -15,7 +20,7 @@ const footerLinks = {
     { label: "Gallery", href: "#gallery" },
   ],
   Admissions: [
-    { label: "Apply Now", href: "#contact" },
+    { label: "Apply Now", href: "/admissions" },
     { label: "Tuition", href: "#contact" },
     { label: "Scholarships", href: "#contact" },
     { label: "FAQ", href: "#contact" },
@@ -37,6 +42,19 @@ const socials = [
 
 export function Footer() {
   const [subscribed, setSubscribed] = useState(false);
+  const [admissionsOpen, setAdmissionsOpen] = useState(false);
+
+  useEffect(() => {
+    async function fetchSettings() {
+      try {
+        const { data } = await supabase.from("system_settings").select("admissions_open").eq("id", 1).single();
+        if (data) setAdmissionsOpen(data.admissions_open);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    fetchSettings();
+  }, []);
 
   function handleNewsletter(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -87,13 +105,7 @@ export function Footer() {
               ))}
             </div>
 
-            <motion.a
-              href="#contact"
-              whileHover={{ y: -2 }}
-              className={cn(btn.accent, "mt-6 hidden sm:inline-flex")}
-            >
-              Apply Now
-            </motion.a>
+
           </div>
 
           {Object.entries(footerLinks).map(([title, links]) => (
@@ -102,17 +114,19 @@ export function Footer() {
                 {title}
               </h4>
               <ul className="mt-4 space-y-2.5">
-                {links.map((link) => (
-                  <li key={link.label}>
-                    <motion.a
-                      href={link.href}
-                      whileHover={{ x: 3 }}
-                      className="inline-block text-sm text-slate-300 transition-colors hover:text-gold-300"
-                    >
-                      {link.label}
-                    </motion.a>
-                  </li>
-                ))}
+                {links
+                  .filter((link) => admissionsOpen || link.label !== "Apply Now")
+                  .map((link) => (
+                    <li key={link.label}>
+                      <motion.a
+                        href={link.href}
+                        whileHover={{ x: 3 }}
+                        className="inline-block text-sm text-slate-300 transition-colors hover:text-gold-300"
+                      >
+                        {link.label}
+                      </motion.a>
+                    </li>
+                  ))}
               </ul>
             </div>
           ))}

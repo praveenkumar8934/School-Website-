@@ -9,13 +9,46 @@ import { useScrollSpy } from "@/hooks/useScrollSpy";
 import { NAV_LINKS, NAV_SECTION_IDS } from "@/lib/nav-config";
 import { btn } from "@/lib/styles";
 import { cn } from "@/lib/utils";
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export function Navbar() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [session, setSession] = useState<{ portal: string } | null>(null);
+  const [admissionsOpen, setAdmissionsOpen] = useState(false);
   const activeSection = useScrollSpy(NAV_SECTION_IDS);
 
   useEffect(() => {
+    // Check session securely
+    async function checkSession() {
+      try {
+        const res = await fetch("/api/auth/session");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.user) {
+            setSession({ portal: data.user.role });
+          }
+        }
+      } catch (e) {
+        console.error("Session fetch error", e);
+      }
+    }
+    checkSession();
+
+    async function fetchSettings() {
+      try {
+        const { data } = await supabase.from("system_settings").select("admissions_open").eq("id", 1).single();
+        if (data) setAdmissionsOpen(data.admissions_open);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    fetchSettings();
+
     const onScroll = () => setScrolled(window.scrollY > 20);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -75,27 +108,51 @@ export function Navbar() {
           </ul>
 
           <div className="hidden items-center gap-2 md:flex md:gap-3">
-            <motion.a
-              href="#contact"
-              whileHover={{ y: -1 }}
-              whileTap={{ scale: 0.98 }}
-              className={cn(
-                "rounded-full px-4 py-2 text-sm font-medium transition-colors duration-200",
-                scrolled
-                  ? "text-foreground-muted hover:text-blue-600"
-                  : "text-white/90 hover:text-gold-300"
-              )}
-            >
-              Log in
-            </motion.a>
-            <motion.a
-              href="#contact"
-              whileHover={{ scale: 1.03, y: -1 }}
-              whileTap={{ scale: 0.97 }}
-              className={cn(btn.accent, "px-5 py-2.5 text-sm")}
-            >
-              Apply Now
-            </motion.a>
+            {session ? (
+              <motion.a
+                href={
+                  session.portal === "admin"
+                    ? "/admin-dashboard"
+                    : session.portal === "faculty"
+                    ? "/teacher-dashboard"
+                    : "/dashboard"
+                }
+                whileHover={{ y: -1 }}
+                whileTap={{ scale: 0.98 }}
+                className={cn(
+                  "rounded-full px-4 py-2 text-sm font-medium transition-colors duration-200",
+                  scrolled
+                    ? "text-foreground-muted hover:text-blue-600"
+                    : "text-white/90 hover:text-gold-300"
+                )}
+              >
+                Dashboard
+              </motion.a>
+            ) : (
+              <motion.a
+                href="/login"
+                whileHover={{ y: -1 }}
+                whileTap={{ scale: 0.98 }}
+                className={cn(
+                  "rounded-full px-4 py-2 text-sm font-medium transition-colors duration-200",
+                  scrolled
+                    ? "text-foreground-muted hover:text-blue-600"
+                    : "text-white/90 hover:text-gold-300"
+                )}
+              >
+                Log in
+              </motion.a>
+            )}
+            {admissionsOpen && (
+              <motion.a
+                href="/admissions"
+                whileHover={{ scale: 1.03, y: -1 }}
+                whileTap={{ scale: 0.97 }}
+                className={cn(btn.accent, "px-5 py-2.5 text-sm")}
+              >
+                Apply Now
+              </motion.a>
+            )}
           </div>
 
           <motion.button
@@ -122,6 +179,7 @@ export function Navbar() {
         onClose={closeMenu}
         links={NAV_LINKS}
         activeSection={activeSection}
+        admissionsOpen={admissionsOpen}
       />
     </>
   );
