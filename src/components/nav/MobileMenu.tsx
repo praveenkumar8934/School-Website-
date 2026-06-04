@@ -5,6 +5,9 @@ import { useEffect } from "react";
 import { NavLink } from "@/components/nav/NavLink";
 import { btn } from "@/lib/styles";
 import type { NavLink as NavLinkType } from "@/lib/nav-config";
+import Link from "next/link";
+
+const MotionLink = motion(Link);
 
 const menuVariants = {
   closed: { opacity: 0 },
@@ -117,15 +120,15 @@ export function MobileMenu({
             </motion.nav>
 
             <div className="space-y-3 border-t border-border-subtle p-4">
-              <a
+              <Link
                 href="/login"
                 onClick={onClose}
                 className="flex min-h-[48px] items-center justify-center rounded-xl px-4 py-3 text-center text-sm font-medium text-foreground-muted transition hover:bg-background-muted hover:text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 Log in
-              </a>
+              </Link>
               {admissionsOpen && (
-                <motion.a
+                <MotionLink
                   href="/admissions"
                   onClick={onClose}
                   whileHover={{ scale: 1.02 }}
@@ -133,7 +136,7 @@ export function MobileMenu({
                   className={`${btn.accent} w-full`}
                 >
                   Apply Now
-                </motion.a>
+                </MotionLink>
               )}
             </div>
           </motion.aside>

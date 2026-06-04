@@ -6,6 +6,9 @@ import { SectionShell } from "@/components/ui/SectionShell";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { ArrowUpRight, Atom, Code2, Palette, TrendingUp } from "lucide-react";
+import Link from "next/link";
+
+const MotionLink = motion(Link);
 
 const courses = [
   {
@@ -94,8 +97,8 @@ export function Courses() {
               <p className="relative mt-3 text-sm leading-relaxed text-slate-300">
                 {course.desc}
               </p>
-              <motion.a
-                href="#contact"
+              <MotionLink
+                href="/#contact"
                 whileHover={{ x: 2 }}
                 className="relative mt-7 inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-semibold text-gold-200 transition-colors hover:border-gold-400/45 hover:bg-white/15 hover:text-gold-100"
               >
@@ -104,7 +107,7 @@ export function Courses() {
                   className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
                   aria-hidden
                 />
-              </motion.a>
+              </MotionLink>
             </motion.article>
           </Reveal>
         ))}

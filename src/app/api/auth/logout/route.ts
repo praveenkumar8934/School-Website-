@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { createClient } from "@/utils/supabase/server";
 
 export async function POST() {
-  const cookieStore = await cookies();
-  cookieStore.delete("nova_session_token");
-
-  return NextResponse.json({ success: true });
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  
+  const response = NextResponse.json({ success: true }, { status: 200 });
+  response.cookies.delete('student_session');
+  
+  return response;
 }

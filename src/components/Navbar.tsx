@@ -10,6 +10,9 @@ import { NAV_LINKS, NAV_SECTION_IDS } from "@/lib/nav-config";
 import { btn } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { createClient } from "@supabase/supabase-js";
+import Link from "next/link";
+
+const MotionLink = motion(Link);
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -72,8 +75,8 @@ export function Navbar() {
               : "glass-hero border-white/15 shadow-none"
           )}
         >
-          <motion.a
-            href="#home"
+          <MotionLink
+            href="/#home"
             onClick={closeMenu}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -93,7 +96,7 @@ export function Navbar() {
                 Academy
               </span>
             </span>
-          </motion.a>
+          </MotionLink>
 
           <ul className="hidden items-center gap-6 lg:gap-8 md:flex">
             {NAV_LINKS.map((link) => (
@@ -109,7 +112,7 @@ export function Navbar() {
 
           <div className="hidden items-center gap-2 md:flex md:gap-3">
             {session ? (
-              <motion.a
+              <MotionLink
                 href={
                   session.portal === "admin"
                     ? "/admin-dashboard"
@@ -127,9 +130,9 @@ export function Navbar() {
                 )}
               >
                 Dashboard
-              </motion.a>
+              </MotionLink>
             ) : (
-              <motion.a
+              <MotionLink
                 href="/login"
                 whileHover={{ y: -1 }}
                 whileTap={{ scale: 0.98 }}
@@ -141,17 +144,17 @@ export function Navbar() {
                 )}
               >
                 Log in
-              </motion.a>
+              </MotionLink>
             )}
             {admissionsOpen && (
-              <motion.a
+              <MotionLink
                 href="/admissions"
                 whileHover={{ scale: 1.03, y: -1 }}
                 whileTap={{ scale: 0.97 }}
                 className={cn(btn.accent, "px-5 py-2.5 text-sm")}
               >
                 Apply Now
-              </motion.a>
+              </MotionLink>
             )}
           </div>
 

@@ -6,8 +6,8 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { SectionShell } from "@/components/ui/SectionShell";
 import { btn, input } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-import { motion } from "framer-motion";
-import { Mail, MapPin, Phone, Send } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Mail, MapPin, Phone, Send, CheckCircle } from "lucide-react";
 import { FormEvent, useState } from "react";
 
 const contactItems = [
@@ -29,12 +29,33 @@ const fieldClass = (focused: boolean) =>
 
 export function Contact() {
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [focused, setFocused] = useState<string | null>(null);
 
-  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setSubmitted(true);
-    setTimeout(() => setSubmitted(false), 4000);
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(Object.fromEntries(formData.entries())),
+      });
+      if (!res.ok) throw new Error("Failed to send message");
+      setSubmitted(true);
+      form.reset();
+      setTimeout(() => setSubmitted(false), 5000);
+    } catch (err) {
+      console.error("Contact error:", err);
+      setError("Failed to send message. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -86,8 +107,46 @@ export function Contact() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             aria-label="Admissions inquiry form"
-            className="glass-card glow-ring card-interactive rounded-3xl p-6 sm:p-8 lg:p-10"
+            className="glass-card glow-ring card-interactive rounded-3xl p-6 sm:p-8 lg:p-10 relative overflow-hidden"
           >
+            {/* Success Overlay */}
+            <AnimatePresence>
+              {submitted && !error && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 z-10 bg-white/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center"
+                >
+                  <motion.div
+                    initial={{ scale: 0.3, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: "spring", damping: 15 }}
+                    className="h-20 w-20 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500 border border-emerald-100 mb-6"
+                  >
+                    <CheckCircle className="h-10 w-10" />
+                  </motion.div>
+                  
+                  <motion.h3
+                    initial={{ y: 12, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ delay: 0.1 }}
+                    className="font-heading text-2xl font-bold text-navy-900"
+                  >
+                    Message Sent!
+                  </motion.h3>
+
+                  <motion.p
+                    initial={{ y: 12, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ delay: 0.2 }}
+                    className="mt-3 text-slate-600 font-medium"
+                  >
+                    Thank you for reaching out. Our admissions team will be in touch shortly.
+                  </motion.p>
+                </motion.div>
+              )}
+            </AnimatePresence>
             <h3 className="font-heading text-lg font-bold text-navy-900 sm:text-xl">
               Request Information
             </h3>
@@ -170,16 +229,24 @@ export function Contact() {
               />
             </label>
 
+            {error && (
+              <div className="mt-4 p-3 bg-red-100 text-red-700 text-sm rounded-lg border border-red-200">
+                {error}
+              </div>
+            )}
+
             <motion.button
               type="submit"
               whileHover={{ y: -2, scale: 1.01 }}
               whileTap={{ scale: 0.98 }}
-              disabled={submitted}
+              disabled={submitting || submitted}
               aria-live="polite"
               className={cn(btn.accent, "mt-8 w-full text-base disabled:opacity-80")}
             >
-              {submitted ? (
-                "Message sent — thank you!"
+              {submitting ? (
+                "Sending..."
+              ) : submitted ? (
+                "Message Sent"
               ) : (
                 <>
                   Send Message

@@ -53,7 +53,8 @@ export async function POST(request: NextRequest) {
           dob: data.dob,
           gender: data.gender,
           religion: data.religion.trim(),
-          blood_group: data.bloodGroup,
+          blood_group: "N/A",
+          marksheet: "N/A",
           student_photo: data.studentPhoto, // Holds base64 encoded picture string
           father_name: data.fatherName.trim(),
           mother_name: data.motherName.trim(),
@@ -64,16 +65,16 @@ export async function POST(request: NextRequest) {
           prev_school: data.prevSchool.trim(),
           prev_class: data.prevClass.trim(),
           grade: data.grade,
-          marksheet: data.marksheet, // Holds marksheet filename
           aadhar_number: data.aadharNumber.trim(),
           aadhar_image: data.aadharImage,
           address: data.address.trim(),
           city: data.city.trim(),
           state: data.state.trim(),
           pin_code: data.pinCode.trim(),
-          notes: data.notes ? data.notes.trim() : null,
           status: "pending",
-          password_hash: passwordHash
+          password_hash: passwordHash,
+          payment_status: data.paymentStatus || "pending",
+          payment_id: data.paymentId || null
         }
       ]);
 
@@ -137,10 +138,6 @@ export async function POST(request: NextRequest) {
                       <td class="label">Religion</td>
                       <td>${data.religion}</td>
                     </tr>
-                    <tr>
-                      <td class="label">Blood Group</td>
-                      <td>${data.bloodGroup}</td>
-                    </tr>
                   </table>
 
                   <div class="section-title">2. Parent & Contacts Details</div>
@@ -185,10 +182,6 @@ export async function POST(request: NextRequest) {
                       <td class="label">Class Applying For</td>
                       <td><strong>${data.grade}</strong></td>
                     </tr>
-                    <tr>
-                      <td class="label">Marksheet Upload</td>
-                      <td>Uploaded: <em>${data.marksheet}</em></td>
-                    </tr>
                   </table>
 
                   <div class="section-title">4. Residential & Verification</div>
@@ -206,13 +199,6 @@ export async function POST(request: NextRequest) {
                       <td>${data.address}, ${data.city}, ${data.state} - ${data.pinCode}</td>
                     </tr>
                   </table>
-
-                  ${data.notes ? `
-                    <div class="section-title">Additional Comments / Notes</div>
-                    <div style="background-color: #f8fafc; padding: 14px; border-radius: 8px; border: 1px solid #f1f5f9; font-style: italic; color: #475569; font-size: 13.5px; line-height: 1.5;">
-                      "${data.notes.replace(/\n/g, "<br>")}"
-                    </div>
-                  ` : ""}
                   
                 </div>
                 <div class="footer">
@@ -236,6 +222,49 @@ export async function POST(request: NextRequest) {
         } else {
           console.log(`Admissions email notice sent successfully. ID: ${emailResult.data?.id}`);
         }
+
+        // Send payment confirmation email to parent
+        const parentEmailResult = await resend.emails.send({
+          from: "Nova Academy Admissions <onboarding@resend.dev>",
+          to: data.parentEmail,
+          subject: `💳 Payment Confirmation: Registration Fee for ${data.studentName}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
+              <h2 style="color: #1e4a7a;">Payment Receipt</h2>
+              <p>Dear ${data.fatherName} / ${data.motherName},</p>
+              <p>We have successfully received the admission registration fee for <strong>${data.studentName}</strong>.</p>
+              <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                <tr>
+                  <td style="padding: 10px; border-bottom: 1px solid #ddd;"><strong>Student Name:</strong></td>
+                  <td style="padding: 10px; border-bottom: 1px solid #ddd;">${data.studentName}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 10px; border-bottom: 1px solid #ddd;"><strong>Class Applied:</strong></td>
+                  <td style="padding: 10px; border-bottom: 1px solid #ddd;">${data.grade}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 10px; border-bottom: 1px solid #ddd;"><strong>Amount Paid:</strong></td>
+                  <td style="padding: 10px; border-bottom: 1px solid #ddd;">₹1,000.00</td>
+                </tr>
+                <tr>
+                  <td style="padding: 10px; border-bottom: 1px solid #ddd;"><strong>Transaction ID:</strong></td>
+                  <td style="padding: 10px; border-bottom: 1px solid #ddd;">${data.paymentId || 'N/A'}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 10px; border-bottom: 1px solid #ddd;"><strong>Status:</strong></td>
+                  <td style="padding: 10px; border-bottom: 1px solid #ddd; color: green;">Completed</td>
+                </tr>
+              </table>
+              <p>The application is now under review. We will contact you soon regarding the next steps.</p>
+              <p>Regards,<br>Nova Academy Admissions Team</p>
+            </div>
+          `,
+        });
+        
+        if (parentEmailResult.error) {
+          console.error("Failed to send parent confirmation email:", parentEmailResult.error);
+        }
+
       } catch (emailErr) {
         console.error("Resend Email Notification crashed inside admissions-submit:", emailErr);
       }

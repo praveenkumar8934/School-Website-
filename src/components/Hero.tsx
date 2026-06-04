@@ -4,9 +4,12 @@ import { AmbientBackground } from "@/components/ui/AmbientBackground";
 import { btn } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { motion, type Variants } from "framer-motion";
-import { ArrowRight, Play, Sparkles } from "lucide-react";
+import { ArrowRight, Play, Sparkles, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
+import Link from "next/link";
+
+const MotionLink = motion(Link);
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -42,6 +45,7 @@ const floatCard = (delay: number): Variants => ({
 export function Hero() {
   const [admissionsOpen, setAdmissionsOpen] = useState(false);
   const [academicYear, setAcademicYear] = useState("2026–27");
+  const [isVideoOpen, setIsVideoOpen] = useState(false);
 
   useEffect(() => {
     async function fetchSettings() {
@@ -143,7 +147,7 @@ export function Hero() {
             className="mt-10 flex flex-col items-stretch justify-center gap-3 sm:mt-12 sm:flex-row sm:items-center sm:justify-center sm:gap-4"
           >
             {admissionsOpen && (
-              <motion.a
+              <MotionLink
                 href="/admissions"
                 whileHover={{ scale: 1.04, y: -3 }}
                 whileTap={{ scale: 0.97 }}
@@ -154,10 +158,11 @@ export function Hero() {
                   className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1"
                   aria-hidden
                 />
-              </motion.a>
+              </MotionLink>
             )}
             <motion.button
               type="button"
+              onClick={() => setIsVideoOpen(true)}
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
               aria-label="Watch campus tour video"
@@ -174,6 +179,28 @@ export function Hero() {
           </motion.div>
         </motion.div>
       </div>
+
+      {isVideoOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="relative w-full max-w-4xl bg-black rounded-2xl overflow-hidden aspect-video shadow-2xl">
+            <button
+              onClick={() => setIsVideoOpen(false)}
+              className="absolute top-4 right-4 z-10 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <iframe 
+              width="100%" 
+              height="100%" 
+              src="https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1" 
+              title="Campus Tour" 
+              frameBorder="0" 
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+              allowFullScreen
+            ></iframe>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

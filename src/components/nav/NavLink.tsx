@@ -3,6 +3,9 @@
 import { motion } from "framer-motion";
 import type { NavLink as NavLinkType } from "@/lib/nav-config";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
+
+const MotionLink = motion(Link);
 
 type NavLinkProps = {
   link: NavLinkType;
@@ -21,8 +24,8 @@ export function NavLink({
 }: NavLinkProps) {
   if (variant === "mobile") {
     return (
-      <motion.a
-        href={link.href}
+      <MotionLink
+        href={link.href.startsWith("#") ? `/${link.href}` : link.href}
         onClick={onNavigate}
         whileHover={{ x: 4 }}
         whileTap={{ scale: 0.98 }}
@@ -41,13 +44,13 @@ export function NavLink({
           />
         )}
         <span className={cn("pl-2", active && "pl-3")}>{link.label}</span>
-      </motion.a>
+      </MotionLink>
     );
   }
 
   return (
-    <a
-      href={link.href}
+    <Link
+      href={link.href.startsWith("#") ? `/${link.href}` : link.href}
       onClick={onNavigate}
       className={cn(
         "link-underline relative rounded-md px-1 py-2 text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2",
@@ -73,6 +76,6 @@ export function NavLink({
           transition={{ type: "spring", stiffness: 400, damping: 32 }}
         />
       )}
-    </a>
+    </Link>
   );
 }

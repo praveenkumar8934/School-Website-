@@ -10,6 +10,9 @@ import { SectionShell } from "@/components/ui/SectionShell";
 import { btn, card } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import Link from "next/link";
+
+const MotionLink = motion(Link);
 
 const faculty = [
   {
@@ -53,14 +56,14 @@ export function Faculty() {
           title="Learn from world-class educators"
           description="85% of our faculty hold advanced degrees from top universities and bring real industry experience into every classroom."
         />
-        <motion.a
-          href="#contact"
+        <MotionLink
+          href="/faculty"
           whileHover={{ y: -2, scale: 1.02 }}
           whileTap={{ scale: 0.97 }}
           className={cn(btn.outline, "link-underline shrink-0")}
         >
           Meet all faculty →
-        </motion.a>
+        </MotionLink>
       </Reveal>
 
       <motion.div

@@ -8,13 +8,14 @@ import {
   Users, UserPlus, BookOpen, Settings, LogOut,
   Menu, X, ChevronRight, Home, Shield, DollarSign,
   TrendingUp, CheckCircle, XCircle, Search, FileText, Download,
-  Mail, Phone, Bell
+  Mail, Phone, Bell, Image, Edit2, Clock, AlertCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
   PieChart, Pie, Cell
 } from "recharts";
+import { generateInstallments, FeeDetails } from "@/lib/feeStructure";
 
 /* ═══════════════════════════════════════════════
    MOCK DATA FOR ADMIN
@@ -30,8 +31,10 @@ const navItems = [
   { id: "overview",   label: "Overview",       icon: Home },
   { id: "admissions", label: "Admissions Hub", icon: UserPlus },
   { id: "students",   label: "Student Directory",icon: Users },
+  { id: "fees",       label: "Fee Management",   icon: DollarSign },
   { id: "teachers",   label: "Faculty & Staff",icon: BookOpen },
   { id: "notices",    label: "Notice Board",   icon: Bell },
+  { id: "gallery",    label: "Gallery Management", icon: Image },
   { id: "settings",   label: "System Settings",icon: Settings },
 ];
 
@@ -64,15 +67,36 @@ export default function AdminDashboard() {
   const [studentSectionFilter, setStudentSectionFilter] = useState("All");
   const [studentFeeFilter, setStudentFeeFilter] = useState("All");
 
+  // Fee Management Filters
+  const [feeSearchQuery, setFeeSearchQuery] = useState("");
+  const [feeFilter, setFeeFilter] = useState("All");
+  const [updatingFeeId, setUpdatingFeeId] = useState<string | null>(null);
+  const [selectedStudentForFees, setSelectedStudentForFees] = useState<any | null>(null);
+
   // Faculty Requests state
   const [facultyRequests, setFacultyRequests] = useState<any[]>([]);
   const [loadingFaculty, setLoadingFaculty] = useState(false);
+  const [editingFaculty, setEditingFaculty] = useState<any | null>(null);
+  const [facultyImageFile, setFacultyImageFile] = useState<File | null>(null);
+  const [isSavingFaculty, setIsSavingFaculty] = useState(false);
 
   // Notices state
   const [notices, setNotices] = useState<any[]>([]);
   const [loadingNotices, setLoadingNotices] = useState(false);
   const [newNotice, setNewNotice] = useState({ title: "", date: "", tag: "Notice" });
   const [publishingNotice, setPublishingNotice] = useState(false);
+
+  // Gallery state
+  const [galleryImages, setGalleryImages] = useState<any[]>([]);
+  const [loadingGallery, setLoadingGallery] = useState(false);
+  const [newGalleryImage, setNewGalleryImage] = useState({ title: "", span: "col-span-1 row-span-1", hue: "220", category: "Campus", description: "", filter_style: "none", is_published: true });
+  const [galleryFile, setGalleryFile] = useState<File | null>(null);
+  const [uploadingGallery, setUploadingGallery] = useState(false);
+  
+  // Gallery Edit state
+  const [editingGalleryImageId, setEditingGalleryImageId] = useState<string | null>(null);
+  const [editGalleryForm, setEditGalleryForm] = useState({ title: "", span: "col-span-1 row-span-1", hue: "220", category: "Campus", description: "", filter_style: "none", is_published: true });
+  const [savingGalleryEdit, setSavingGalleryEdit] = useState(false);
 
   // System Settings state
   const [sysSettings, setSysSettings] = useState<any>({
@@ -109,16 +133,19 @@ export default function AdminDashboard() {
     if (activeSection === "teachers") {
       fetchFacultyRegistrations();
     }
-    if (activeSection === "students") {
+    if (activeSection === "students" || activeSection === "fees") {
       fetchStudents();
     }
     if (activeSection === "notices") {
       fetchNotices();
     }
+    if (activeSection === "gallery") {
+      fetchGalleryImages();
+    }
     if (activeSection === "settings") {
       fetchSettings();
     }
-  }, [activeSection, router]);
+  }, [activeSection, isAuthenticated, router]);
 
   const fetchAdmissions = async () => {
     setLoadingAdmissions(true);
@@ -157,6 +184,67 @@ export default function AdminDashboard() {
       console.error("Error fetching students:", err);
     } finally {
       setLoadingStudents(false);
+    }
+  };
+
+  const handleUpdateFeeStatus = async (studentId: string, newStatus: string) => {
+    setUpdatingFeeId(studentId);
+    try {
+      const { error } = await supabase
+        .from("students")
+        .update({ fee_status: newStatus })
+        .eq("id", studentId);
+      
+      if (error) throw error;
+      
+      setStudents(students.map(s => s.id === studentId ? { ...s, fee_status: newStatus } : s));
+    } catch (err) {
+      console.error("Error updating fee status:", err);
+      alert("Failed to update fee status.");
+    } finally {
+      setUpdatingFeeId(null);
+    }
+  };
+
+  const handleUpdateInstallmentStatus = async (studentId: string, installmentId: string, newStatus: string) => {
+    const student = students.find(s => s.id === studentId);
+    if (!student) return;
+
+    let feeDetails = student.fee_details;
+    if (!feeDetails) {
+      feeDetails = generateInstallments(student.grade);
+    }
+
+    const updatedInstallments = feeDetails.installments.map((inst: any) => 
+      inst.id === installmentId ? { ...inst, status: newStatus, paidDate: newStatus === 'Paid' ? new Date().toISOString() : null } : inst
+    );
+
+    const totalPaid = updatedInstallments.filter((i: any) => i.status === 'Paid').reduce((acc: number, curr: any) => acc + curr.amount, 0);
+    const allPaid = updatedInstallments.every((i: any) => i.status === 'Paid');
+    const newOverallStatus = allPaid ? "Paid" : "Pending";
+
+    const updatedFeeDetails = {
+      ...feeDetails,
+      installments: updatedInstallments,
+      totalPaid
+    };
+
+    try {
+      const { error } = await supabase
+        .from("students")
+        .update({ fee_status: newOverallStatus, fee_details: updatedFeeDetails })
+        .eq("id", studentId);
+      
+      if (error) throw error;
+      
+      const newStudentObj = { ...student, fee_status: newOverallStatus, fee_details: updatedFeeDetails };
+      setStudents(students.map(s => s.id === studentId ? newStudentObj : s));
+      if (selectedStudentForFees?.id === studentId) {
+        setSelectedStudentForFees(newStudentObj);
+      }
+    } catch (err) {
+      console.error("Error updating installment status:", err);
+      alert("Failed to update installment status.");
     }
   };
 
@@ -245,13 +333,122 @@ export default function AdminDashboard() {
     }
   };
 
+  const fetchGalleryImages = async () => {
+    setLoadingGallery(true);
+    try {
+      const { data, error } = await supabase.from("gallery_images").select("*").order("created_at", { ascending: false });
+      if (error) throw error;
+      setGalleryImages(data || []);
+    } catch (err: any) {
+      console.error("Error fetching gallery:", err);
+    } finally {
+      setLoadingGallery(false);
+    }
+  };
+
+  const handleUploadGalleryImage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!galleryFile) {
+      alert("Please select a file first.");
+      return;
+    }
+    setUploadingGallery(true);
+    try {
+      const fileExt = galleryFile.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('gallery')
+        .upload(filePath, galleryFile);
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabase.storage
+        .from('gallery')
+        .getPublicUrl(filePath);
+
+      const { error: insertError } = await supabase.from('gallery_images').insert([{
+        title: newGalleryImage.title,
+        image_url: publicUrlData.publicUrl,
+        span: newGalleryImage.span,
+        hue: newGalleryImage.hue,
+        category: newGalleryImage.category,
+        description: newGalleryImage.description,
+        filter_style: newGalleryImage.filter_style,
+        is_published: newGalleryImage.is_published
+      }]);
+
+      if (insertError) throw insertError;
+
+      alert("Image uploaded successfully!");
+      setNewGalleryImage({ title: "", span: "col-span-1 row-span-1", hue: "220", category: "Campus", description: "", filter_style: "none", is_published: true });
+      setGalleryFile(null);
+      fetchGalleryImages();
+    } catch (err: any) {
+      console.error("Upload error:", err);
+      alert("Error uploading image: " + err.message);
+    } finally {
+      setUploadingGallery(false);
+    }
+  };
+
+  const handleDeleteGalleryImage = async (id: string, imageUrl: string) => {
+    if (!confirm("Are you sure you want to delete this image?")) return;
+    try {
+      // Try to extract filename from URL to delete from storage
+      const urlParts = imageUrl.split('/');
+      const fileName = urlParts[urlParts.length - 1];
+      
+      await supabase.storage.from('gallery').remove([fileName]);
+      const { error } = await supabase.from('gallery_images').delete().eq('id', id);
+      if (error) throw error;
+      fetchGalleryImages();
+    } catch (err: any) {
+      console.error("Delete error:", err);
+      alert("Error deleting image: " + err.message);
+    }
+  };
+
+  const handleUpdateGalleryImage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingGalleryImageId) return;
+    setSavingGalleryEdit(true);
+    try {
+      const { error } = await supabase.from('gallery_images').update({
+        title: editGalleryForm.title,
+        span: editGalleryForm.span,
+        hue: editGalleryForm.hue,
+        category: editGalleryForm.category,
+        description: editGalleryForm.description,
+        filter_style: editGalleryForm.filter_style,
+        is_published: editGalleryForm.is_published
+      }).eq('id', editingGalleryImageId);
+      
+      if (error) throw error;
+      
+      setEditingGalleryImageId(null);
+      fetchGalleryImages();
+    } catch (err: any) {
+      console.error("Update error:", err);
+      alert("Error updating image: " + err.message);
+    } finally {
+      setSavingGalleryEdit(false);
+    }
+  };
+
   const handleUpdateStatus = async (id: string, newStatus: string) => {
     try {
+      const admissionRecord = admissions.find(a => a.id === id);
+      if (!admissionRecord) throw new Error("Admission record not found in state");
+
+      // Prevent re-approving an already approved application
+      if (newStatus === "approved" && admissionRecord.status === "approved") {
+        return;
+      }
+
       let student_id = null;
       if (newStatus === "approved") {
-        const admissionRecord = admissions.find(a => a.id === id);
-        if (!admissionRecord) throw new Error("Admission record not found in state");
-        
         const grade = admissionRecord.grade || admissionRecord.grade_applied || "Unknown";
         
         // Generate a class abbreviation (e.g., "Class 1" -> "C1", "Nursery" -> "NUR")
@@ -287,7 +484,6 @@ export default function AdminDashboard() {
       
       // If approved, insert into students table
       if (newStatus === "approved" && student_id) {
-        const admissionRecord = admissions.find(a => a.id === id);
         if (admissionRecord) {
           await supabase.from("students").insert({
             admission_id: admissionRecord.id,
@@ -303,7 +499,8 @@ export default function AdminDashboard() {
             parent_email: admissionRecord.parent_email || admissionRecord.email,
             address: admissionRecord.address,
             assigned_section: "Unassigned",
-            fee_status: "Pending"
+            fee_status: "Pending",
+            fee_details: generateInstallments(admissionRecord.grade || admissionRecord.grade_applied)
           });
 
           // Send approval email notification
@@ -392,6 +589,12 @@ export default function AdminDashboard() {
 
   const handleUpdateFacultyStatus = async (id: string, newStatus: string) => {
     try {
+      const facultyRecord = facultyRequests.find(f => f.id === id);
+      if (!facultyRecord) return;
+      if (newStatus === "approved" && facultyRecord.status === "approved") {
+        return;
+      }
+
       let faculty_id = null;
       // Generate a Faculty ID if the request is being approved
       if (newStatus === "approved") {
@@ -459,6 +662,60 @@ export default function AdminDashboard() {
     } catch (err) {
       console.error("Error assigning class:", err);
       alert("Failed to assign class.");
+    }
+  };
+
+  const handleSaveFaculty = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingFaculty) return;
+    setIsSavingFaculty(true);
+    try {
+      let imageUrl = editingFaculty.image_url;
+
+      if (facultyImageFile) {
+        const fileExt = facultyImageFile.name.split(".").pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `faculty/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("gallery")
+          .upload(filePath, facultyImageFile);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from("gallery")
+          .getPublicUrl(filePath);
+
+        imageUrl = publicUrl;
+      }
+
+      const updateData = {
+        full_name: editingFaculty.full_name,
+        department: editingFaculty.department,
+        qualification: editingFaculty.qualification,
+        experience_years: editingFaculty.experience_years,
+        role_type: editingFaculty.role_type,
+        assigned_subject: editingFaculty.assigned_subject,
+        image_url: imageUrl
+      };
+
+      const { error } = await supabase
+        .from("faculty_registrations")
+        .update(updateData)
+        .eq("id", editingFaculty.id);
+
+      if (error) throw error;
+
+      setFacultyRequests(prev => prev.map(f => f.id === editingFaculty.id ? { ...f, ...updateData } : f));
+      setEditingFaculty(null);
+      setFacultyImageFile(null);
+      alert("Faculty details saved successfully!");
+    } catch (err) {
+      console.error("Error saving faculty:", err);
+      alert("Failed to save faculty details.");
+    } finally {
+      setIsSavingFaculty(false);
     }
   };
 
@@ -752,7 +1009,7 @@ export default function AdminDashboard() {
                           </div>
                         </div>
 
-                        <div className="grid md:grid-cols-2 gap-8">
+                        <div className="grid md:grid-cols-3 gap-8">
                           <div className="space-y-4">
                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Personal Details</h3>
                             <div className="bg-slate-900/50 rounded-xl p-4 space-y-3">
@@ -796,9 +1053,29 @@ export default function AdminDashboard() {
                               </div>
                             </div>
                           </div>
+
+                          <div className="space-y-4">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Payment Details</h3>
+                            <div className="bg-slate-900/50 rounded-xl p-4 space-y-3 h-full">
+                              <div className="flex justify-between border-b border-white/5 pb-2">
+                                <span className="text-xs text-slate-500">Status</span>
+                                <span className="text-xs text-slate-200 font-medium capitalize">
+                                  {selectedAdmission.payment_status === "completed" ? (
+                                    <span className="text-emerald-400 flex items-center gap-1"><CheckCircle className="h-3 w-3" /> Completed</span>
+                                  ) : (
+                                    <span className="text-amber-400">Pending</span>
+                                  )}
+                                </span>
+                              </div>
+                              <div className="flex flex-col border-b border-white/5 pb-2 gap-1">
+                                <span className="text-xs text-slate-500">Transaction ID</span>
+                                <span className="text-xs text-slate-200 font-medium break-all">{selectedAdmission.payment_id || "N/A"}</span>
+                              </div>
+                            </div>
+                          </div>
                         </div>
 
-                        {(selectedAdmission.aadhar_image || selectedAdmission.student_photo || selectedAdmission.marksheet) && (
+                        {(selectedAdmission.aadhar_image || selectedAdmission.student_photo) && (
                           <div className="mt-8">
                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Documents Attached</h3>
                             <div className="flex flex-wrap gap-4">
@@ -816,22 +1093,6 @@ export default function AdminDashboard() {
                                   </div>
                                 </a>
                               )}
-                              
-                              {selectedAdmission.marksheet && (
-                                <a 
-                                  href={selectedAdmission.marksheet} 
-                                  target="_blank" 
-                                  rel="noreferrer"
-                                  className="inline-flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-4 py-3 hover:bg-amber-500/20 transition"
-                                >
-                                  <FileText className="h-5 w-5 text-amber-400" />
-                                  <div>
-                                    <p className="text-sm font-bold text-amber-300">Previous Marksheet</p>
-                                    <p className="text-[10px] text-amber-400/60">Click to view document</p>
-                                  </div>
-                                </a>
-                              )}
-
                               {selectedAdmission.aadhar_image && (
                                 <a 
                                   href={selectedAdmission.aadhar_image} 
@@ -1065,6 +1326,243 @@ export default function AdminDashboard() {
               })()}
 
               {/* ════════════════
+                  FEE MANAGEMENT (Live DB Data)
+              ════════════════ */}
+              {activeSection === "fees" && (() => {
+                const filteredFees = students.filter(s => {
+                  if (feeFilter !== "All" && s.fee_status !== feeFilter) return false;
+                  if (feeSearchQuery && !s.student_name?.toLowerCase().includes(feeSearchQuery.toLowerCase()) && !s.student_id?.toLowerCase().includes(feeSearchQuery.toLowerCase())) return false;
+                  return true;
+                });
+
+                const totalFeesCount = students.length;
+                const paidFeesCount = students.filter(s => s.fee_status === "Paid" || s.fee_status === "completed").length;
+                const pendingFeesCount = students.filter(s => s.fee_status === "Pending").length;
+                const overdueFeesCount = students.filter(s => s.fee_status === "Overdue").length;
+
+                return (
+                  <div className="space-y-6">
+                    {/* Fee Stats */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
+                        <p className="text-xs text-slate-400 mb-1">Total Students</p>
+                        <p className="text-2xl font-bold text-white">{totalFeesCount}</p>
+                      </div>
+                      <div className="p-4 rounded-xl bg-emerald-900/20 border border-emerald-500/20">
+                        <p className="text-xs text-emerald-400 mb-1">Fully Paid</p>
+                        <p className="text-2xl font-bold text-emerald-300">{paidFeesCount}</p>
+                      </div>
+                      <div className="p-4 rounded-xl bg-amber-900/20 border border-amber-500/20">
+                        <p className="text-xs text-amber-400 mb-1">Pending Dues</p>
+                        <p className="text-2xl font-bold text-amber-300">{pendingFeesCount}</p>
+                      </div>
+                      <div className="p-4 rounded-xl bg-red-900/20 border border-red-500/20">
+                        <p className="text-xs text-red-400 mb-1">Overdue</p>
+                        <p className="text-2xl font-bold text-red-300">{overdueFeesCount}</p>
+                      </div>
+                    </div>
+
+                    {/* Filters */}
+                    <div className="flex flex-col md:flex-row gap-4">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="Search by name or student ID..."
+                          value={feeSearchQuery}
+                          onChange={e => setFeeSearchQuery(e.target.value)}
+                          className="w-full bg-slate-800/50 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+                      <select
+                        value={feeFilter}
+                        onChange={e => setFeeFilter(e.target.value)}
+                        className="bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                      >
+                        <option value="All">All Statuses</option>
+                        <option value="Paid">Paid</option>
+                        <option value="completed">Completed (Gateway)</option>
+                        <option value="Pending">Pending</option>
+                        <option value="Overdue">Overdue</option>
+                      </select>
+                    </div>
+
+                    {/* Fees List */}
+                    <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
+                      {loadingStudents ? (
+                        <div className="p-8 text-center text-slate-400">Loading fee records...</div>
+                      ) : filteredFees.length === 0 ? (
+                        <div className="p-8 text-center text-slate-400">No students found matching your filters.</div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-sm text-slate-300">
+                            <thead className="bg-slate-800/80 text-slate-400 uppercase text-xs">
+                              <tr>
+                                <th className="px-6 py-4">Student</th>
+                                <th className="px-6 py-4">Grade / Class</th>
+                                <th className="px-6 py-4">Current Status</th>
+                                <th className="px-6 py-4 text-right">Update Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-700/50">
+                              {filteredFees.map(student => (
+                                <tr key={student.id} className="hover:bg-slate-700/20 transition-colors">
+                                  <td className="px-6 py-4">
+                                    <div className="flex items-center gap-3">
+                                      <img src={student.student_photo || "https://ui-avatars.com/api/?name=S"} alt="" className="w-8 h-8 rounded-full object-cover bg-slate-700" />
+                                      <div>
+                                        <p className="text-white font-medium">{student.student_name}</p>
+                                        <p className="text-xs text-slate-400">{student.student_id}</p>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    {student.grade} {student.assigned_section !== 'Unassigned' && `- Sec ${student.assigned_section}`}
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <span className={cn(
+                                      "px-2.5 py-1 rounded-full text-xs font-medium inline-flex items-center gap-1.5",
+                                      (student.fee_status === "Paid" || student.fee_status === "completed") ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
+                                      student.fee_status === "Pending" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" :
+                                      student.fee_status === "Overdue" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
+                                      "bg-slate-500/10 text-slate-400 border border-slate-500/20"
+                                    )}>
+                                      <span className={cn(
+                                        "w-1.5 h-1.5 rounded-full",
+                                        (student.fee_status === "Paid" || student.fee_status === "completed") ? "bg-emerald-400" :
+                                        student.fee_status === "Pending" ? "bg-amber-400" :
+                                        student.fee_status === "Overdue" ? "bg-red-400" :
+                                        "bg-slate-400"
+                                      )} />
+                                      {student.fee_status === "completed" ? "Paid (Gateway)" : student.fee_status || "Unknown"}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4 text-right">
+                                    <div className="flex justify-end gap-2">
+                                      <button 
+                                        onClick={() => setSelectedStudentForFees(student)}
+                                        className="px-3 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 transition-colors text-xs font-medium flex items-center gap-1.5"
+                                        title="Manage Installments"
+                                      >
+                                        <FileText className="w-3.5 h-3.5" /> Manage
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Manage Installments Modal */}
+                    <AnimatePresence>
+                      {selectedStudentForFees && (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+                        >
+                          <motion.div
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.95, opacity: 0 }}
+                            className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+                          >
+                            <div className="flex justify-between items-center mb-6">
+                              <div>
+                                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                  <DollarSign className="w-5 h-5 text-blue-400" /> Fee Installments
+                                </h3>
+                                <p className="text-sm text-slate-400 mt-1">
+                                  {selectedStudentForFees.student_name} ({selectedStudentForFees.student_id}) - {selectedStudentForFees.grade}
+                                </p>
+                              </div>
+                              <button onClick={() => setSelectedStudentForFees(null)} className="p-2 hover:bg-slate-800 rounded-lg transition">
+                                <X className="w-5 h-5 text-slate-400" />
+                              </button>
+                            </div>
+
+                            <div className="overflow-y-auto pr-2 custom-scrollbar flex-1">
+                              {(() => {
+                                let details = selectedStudentForFees.fee_details;
+                                if (!details && selectedStudentForFees.grade && selectedStudentForFees.grade !== "—") {
+                                  details = generateInstallments(selectedStudentForFees.grade);
+                                }
+
+                                if (!details) {
+                                  return <div className="text-center p-6 text-slate-400 bg-slate-800/50 rounded-lg">Please refresh or wait. Student fee details missing.</div>;
+                                }
+
+                                return (
+                                  <div className="space-y-6">
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div className="p-4 bg-slate-800/50 rounded-xl border border-slate-700">
+                                        <p className="text-xs text-slate-400">Total Fee</p>
+                                        <p className="text-xl font-bold text-white">₹{details.totalFee.toLocaleString()}</p>
+                                      </div>
+                                      <div className="p-4 bg-slate-800/50 rounded-xl border border-slate-700">
+                                        <p className="text-xs text-slate-400">Total Paid</p>
+                                        <p className="text-xl font-bold text-emerald-400">₹{(details.totalPaid || 0).toLocaleString()}</p>
+                                      </div>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                      <h4 className="text-sm font-semibold text-slate-300">Installment Schedule</h4>
+                                      {details.installments.map((inst: any, idx: number) => (
+                                        <div key={inst.id} className="p-4 bg-slate-800/80 rounded-xl border border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                          <div>
+                                            <p className="text-white font-medium">Installment {idx + 1}</p>
+                                            <p className="text-xs text-slate-400 mt-0.5">Due: {new Date(inst.dueDate).toLocaleDateString()}</p>
+                                          </div>
+                                          <div className="flex items-center gap-6">
+                                            <div className="text-right">
+                                              <p className="text-lg font-bold text-blue-400">₹{inst.amount.toLocaleString()}</p>
+                                              <span className={cn(
+                                                "text-xs px-2 py-0.5 rounded-full inline-block mt-1",
+                                                inst.status === 'Paid' ? "bg-emerald-500/10 text-emerald-400" :
+                                                inst.status === 'Overdue' ? "bg-red-500/10 text-red-400" :
+                                                "bg-amber-500/10 text-amber-400"
+                                              )}>
+                                                {inst.status}
+                                              </span>
+                                            </div>
+                                            <div className="flex flex-col gap-2 min-w-[100px]">
+                                              {inst.status !== 'Paid' ? (
+                                                <button 
+                                                  onClick={() => handleUpdateInstallmentStatus(selectedStudentForFees.id, inst.id, 'Paid')}
+                                                  className="w-full px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold transition"
+                                                >
+                                                  Mark Paid
+                                                </button>
+                                              ) : (
+                                                <button 
+                                                  onClick={() => handleUpdateInstallmentStatus(selectedStudentForFees.id, inst.id, 'Pending')}
+                                                  className="w-full px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-xs font-semibold transition"
+                                                >
+                                                  Undo
+                                                </button>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </motion.div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })()}
+
+              {/* ════════════════
                   TEACHERS DIRECTORY (Live DB Data)
               ════════════════ */}
               {activeSection === "teachers" && (
@@ -1119,6 +1617,7 @@ export default function AdminDashboard() {
                               <td className="px-4 py-3 text-right">
                                 <div className="flex flex-col gap-2">
                                   <div className="flex justify-end gap-2">
+
                                     <button 
                                       onClick={() => handleUpdateFacultyStatus(req.id, 'approved')}
                                       className={cn("px-3 py-1 rounded-lg text-xs font-bold transition", req.status === 'approved' ? "bg-emerald-500 text-white" : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20")}
@@ -1289,6 +1788,231 @@ export default function AdminDashboard() {
               )}
 
               {/* ════════════════
+                  GALLERY
+              ════════════════ */}
+              {activeSection === "gallery" && (
+                <div className="space-y-6">
+                  <p className="text-sm text-slate-400">Manage photos displayed in the public Gallery section.</p>
+
+                  <div className="rounded-2xl border border-white/5 bg-white/5 p-5">
+                    <h3 className="text-sm font-bold text-white mb-4">Upload New Image</h3>
+                    <form onSubmit={handleUploadGalleryImage} className="flex flex-col gap-4">
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <input 
+                          type="text" required placeholder="Image Title (e.g. Innovation Lab)"
+                          className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                          value={newGalleryImage.title} onChange={e => setNewGalleryImage({...newGalleryImage, title: e.target.value})}
+                        />
+                        <select 
+                          className="sm:w-[150px] bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                          value={newGalleryImage.category} onChange={e => setNewGalleryImage({...newGalleryImage, category: e.target.value})}
+                        >
+                          <option value="Campus" className="text-black">Campus</option>
+                          <option value="Sports" className="text-black">Sports</option>
+                          <option value="Academics" className="text-black">Academics</option>
+                          <option value="Events" className="text-black">Events</option>
+                          <option value="Faculty" className="text-black">Faculty</option>
+                        </select>
+                        <select 
+                          className="sm:w-[150px] bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                          value={newGalleryImage.span} onChange={e => setNewGalleryImage({...newGalleryImage, span: e.target.value})}
+                        >
+                          <option value="col-span-1 row-span-1" className="text-black">Normal (1x1)</option>
+                          <option value="col-span-2 row-span-1" className="text-black">Wide (2x1)</option>
+                          <option value="col-span-1 row-span-2" className="text-black">Tall (1x2)</option>
+                          <option value="col-span-2 row-span-2" className="text-black">Large (2x2)</option>
+                        </select>
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <input 
+                          type="text" placeholder="Description (Optional)"
+                          className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                          value={newGalleryImage.description} onChange={e => setNewGalleryImage({...newGalleryImage, description: e.target.value})}
+                        />
+                        <select 
+                          className="sm:w-[150px] bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                          value={newGalleryImage.filter_style} onChange={e => setNewGalleryImage({...newGalleryImage, filter_style: e.target.value})}
+                        >
+                          <option value="none" className="text-black">No Filter</option>
+                          <option value="grayscale" className="text-black">Grayscale</option>
+                          <option value="sepia" className="text-black">Sepia</option>
+                          <option value="contrast-125 saturate-150" className="text-black">Vibrant</option>
+                          <option value="blur-[2px]" className="text-black">Slight Blur</option>
+                        </select>
+                        <select 
+                          className="sm:w-[150px] bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                          value={newGalleryImage.hue} onChange={e => setNewGalleryImage({...newGalleryImage, hue: e.target.value})}
+                        >
+                          <option value="none" className="text-black">No Hue</option>
+                          <option value="220" className="text-black">Blue Hue</option>
+                          <option value="280" className="text-black">Purple Hue</option>
+                          <option value="150" className="text-black">Green Hue</option>
+                          <option value="330" className="text-black">Pink Hue</option>
+                          <option value="40" className="text-black">Gold Hue</option>
+                        </select>
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-3 items-center">
+                        <input 
+                          type="file" required accept="image/*"
+                          className="flex-1 text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                          onChange={e => setGalleryFile(e.target.files ? e.target.files[0] : null)}
+                        />
+                        <button 
+                          type="submit" disabled={uploadingGallery}
+                          className="bg-blue-600 hover:bg-blue-500 transition px-6 py-2.5 rounded-xl text-sm font-bold text-white whitespace-nowrap w-full sm:w-auto"
+                        >
+                          {uploadingGallery ? "Uploading..." : "Upload Photo"}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/5 bg-white/5 p-5">
+                    <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                      <Image className="h-4 w-4 text-blue-400" /> Existing Gallery Photos
+                    </h3>
+                    {loadingGallery ? (
+                      <p className="text-slate-400 text-sm">Loading gallery...</p>
+                    ) : galleryImages.length === 0 ? (
+                      <p className="text-slate-500 text-sm italic">No photos uploaded yet.</p>
+                    ) : (
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {galleryImages.map((img, i) => (
+                          <motion.div key={img.id} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.05 }}
+                            className="rounded-xl border border-white/5 bg-black/20 overflow-hidden relative group">
+                            <div className="aspect-square relative">
+                              {/* Fallback gradient while loading/if broken, or actual image */}
+                              {img.hue !== 'none' && (
+                                <div className="absolute inset-0" style={{ background: `linear-gradient(160deg, hsl(${img.hue} 50% 45%) 0%, hsl(${img.hue} 60% 30%) 100%)` }} />
+                              )}
+                              {img.hue === 'none' && <div className="absolute inset-0 bg-slate-900" />}
+                              <img 
+                                src={img.image_url} 
+                                alt={img.title} 
+                                className={cn(
+                                  "absolute inset-0 w-full h-full object-cover transition-opacity",
+                                  img.hue !== 'none' ? "mix-blend-overlay opacity-80 group-hover:opacity-100" : "",
+                                  img.filter_style !== 'none' && img.filter_style
+                                )} 
+                              />
+                              
+                              {!img.is_published && (
+                                <div className="absolute top-2 left-2 bg-black/70 backdrop-blur text-yellow-400 text-[10px] font-bold px-2 py-1 rounded">HIDDEN</div>
+                              )}
+
+                              {editingGalleryImageId !== img.id && (
+                                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button 
+                                    onClick={() => {
+                                      setEditingGalleryImageId(img.id);
+                                      setEditGalleryForm({ title: img.title, span: img.span, hue: img.hue, category: img.category, description: img.description, filter_style: img.filter_style, is_published: img.is_published });
+                                    }}
+                                    className="bg-blue-500 text-white p-1.5 rounded-lg hover:bg-blue-600 shadow"
+                                    title="Edit"
+                                  >
+                                    <Edit2 className="h-4 w-4" />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDeleteGalleryImage(img.id, img.image_url)}
+                                    className="bg-red-500 text-white p-1.5 rounded-lg hover:bg-red-600 shadow"
+                                    title="Delete"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            
+                            {editingGalleryImageId === img.id ? (
+                              <div className="p-3 bg-white/5 border-t border-white/10">
+                                <form onSubmit={handleUpdateGalleryImage} className="flex flex-col gap-2">
+                                  <input 
+                                    type="text" required placeholder="Title"
+                                    className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none"
+                                    value={editGalleryForm.title} onChange={e => setEditGalleryForm({...editGalleryForm, title: e.target.value})}
+                                  />
+                                  <textarea 
+                                    placeholder="Description" rows={2}
+                                    className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none resize-none"
+                                    value={editGalleryForm.description} onChange={e => setEditGalleryForm({...editGalleryForm, description: e.target.value})}
+                                  />
+                                  <div className="flex gap-2">
+                                    <select 
+                                      className="flex-1 bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none"
+                                      value={editGalleryForm.category} onChange={e => setEditGalleryForm({...editGalleryForm, category: e.target.value})}
+                                    >
+                                      <option value="Campus" className="text-black">Campus</option>
+                                      <option value="Sports" className="text-black">Sports</option>
+                                      <option value="Academics" className="text-black">Academics</option>
+                                      <option value="Events" className="text-black">Events</option>
+                                    </select>
+                                    <select 
+                                      className="flex-1 bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none"
+                                      value={editGalleryForm.span} onChange={e => setEditGalleryForm({...editGalleryForm, span: e.target.value})}
+                                    >
+                                      <option value="col-span-1 row-span-1" className="text-black">Normal</option>
+                                      <option value="col-span-2 row-span-1" className="text-black">Wide</option>
+                                      <option value="col-span-1 row-span-2" className="text-black">Tall</option>
+                                      <option value="col-span-2 row-span-2" className="text-black">Large</option>
+                                    </select>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <select 
+                                      className="flex-1 bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none"
+                                      value={editGalleryForm.hue} onChange={e => setEditGalleryForm({...editGalleryForm, hue: e.target.value})}
+                                    >
+                                      <option value="none" className="text-black">No Hue</option>
+                                      <option value="220" className="text-black">Blue</option>
+                                      <option value="280" className="text-black">Purple</option>
+                                      <option value="150" className="text-black">Green</option>
+                                      <option value="330" className="text-black">Pink</option>
+                                      <option value="40" className="text-black">Gold</option>
+                                    </select>
+                                    <select 
+                                      className="flex-1 bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none"
+                                      value={editGalleryForm.filter_style} onChange={e => setEditGalleryForm({...editGalleryForm, filter_style: e.target.value})}
+                                    >
+                                      <option value="none" className="text-black">No Filter</option>
+                                      <option value="grayscale" className="text-black">Grayscale</option>
+                                      <option value="sepia" className="text-black">Sepia</option>
+                                      <option value="contrast-125 saturate-150" className="text-black">Vibrant</option>
+                                      <option value="blur-[2px]" className="text-black">Blur</option>
+                                    </select>
+                                  </div>
+                                  <label className="flex items-center gap-2 text-xs text-slate-300 mt-1 cursor-pointer">
+                                    <input 
+                                      type="checkbox" 
+                                      checked={editGalleryForm.is_published}
+                                      onChange={e => setEditGalleryForm({...editGalleryForm, is_published: e.target.checked})}
+                                      className="rounded bg-black/40 border-white/10 text-blue-500"
+                                    />
+                                    Published (Visible to public)
+                                  </label>
+                                  <div className="flex gap-2 mt-1">
+                                    <button type="submit" disabled={savingGalleryEdit} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white text-xs py-1 rounded font-bold">
+                                      {savingGalleryEdit ? "..." : "Save"}
+                                    </button>
+                                    <button type="button" onClick={() => setEditingGalleryImageId(null)} className="flex-1 bg-white/10 hover:bg-white/20 text-white text-xs py-1 rounded">
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </form>
+                              </div>
+                            ) : (
+                              <div className="p-3">
+                                <p className="text-xs font-bold text-white truncate">{img.title}</p>
+                                <p className="text-[10px] text-slate-400 mt-1">{img.span}</p>
+                              </div>
+                            )}
+                          </motion.div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ════════════════
                   SETTINGS
               ════════════════ */}
               {activeSection === "settings" && (
@@ -1376,6 +2100,124 @@ export default function AdminDashboard() {
 
             </motion.div>
           </AnimatePresence>
+
+          {/* FACULTY EDIT MODAL */}
+          <AnimatePresence>
+            {editingFaculty && (
+              <motion.div 
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+              >
+                <motion.div 
+                  initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
+                  className="bg-slate-900 border border-white/10 p-6 rounded-2xl w-full max-w-lg shadow-2xl relative"
+                >
+                  <button 
+                    onClick={() => { setEditingFaculty(null); setFacultyImageFile(null); }}
+                    className="absolute top-4 right-4 text-slate-400 hover:text-white transition"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                  <h3 className="text-xl font-bold text-white mb-4">Edit Faculty Details</h3>
+                  <form onSubmit={handleSaveFaculty} className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-400 font-bold uppercase tracking-wider">Full Name</label>
+                      <input 
+                        type="text" required
+                        value={editingFaculty.full_name || ""}
+                        onChange={e => setEditingFaculty({...editingFaculty, full_name: e.target.value})}
+                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-xs text-slate-400 font-bold uppercase tracking-wider">Department</label>
+                        <input 
+                          type="text" required
+                          value={editingFaculty.department || ""}
+                          onChange={e => setEditingFaculty({...editingFaculty, department: e.target.value})}
+                          className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-slate-400 font-bold uppercase tracking-wider">Role Type</label>
+                        <select 
+                          value={editingFaculty.role_type || ""}
+                          onChange={e => setEditingFaculty({...editingFaculty, role_type: e.target.value})}
+                          className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                        >
+                          <option value="Teacher">Subject Teacher</option>
+                          <option value="Class Teacher">Class Teacher</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-xs text-slate-400 font-bold uppercase tracking-wider">Qualification</label>
+                        <input 
+                          type="text" required
+                          value={editingFaculty.qualification || ""}
+                          onChange={e => setEditingFaculty({...editingFaculty, qualification: e.target.value})}
+                          className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-slate-400 font-bold uppercase tracking-wider">Experience (Yrs)</label>
+                        <input 
+                          type="number" required min="0"
+                          value={editingFaculty.experience_years || ""}
+                          onChange={e => setEditingFaculty({...editingFaculty, experience_years: e.target.value})}
+                          className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-400 font-bold uppercase tracking-wider">Assigned Subject</label>
+                      <input 
+                        type="text"
+                        value={editingFaculty.assigned_subject || ""}
+                        onChange={e => setEditingFaculty({...editingFaculty, assigned_subject: e.target.value})}
+                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <label className="text-xs text-slate-400 font-bold uppercase tracking-wider">Profile Image</label>
+                      <div className="flex items-center gap-4">
+                        {editingFaculty.image_url && !facultyImageFile && (
+                          <img src={editingFaculty.image_url} alt="Profile" className="w-12 h-12 rounded-full object-cover border border-white/10" />
+                        )}
+                        <input 
+                          type="file" accept="image/*"
+                          onChange={e => e.target.files && setFacultyImageFile(e.target.files[0])}
+                          className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm text-slate-400 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-500 file:text-white hover:file:bg-blue-600"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="pt-4 border-t border-white/10 flex justify-end gap-3">
+                      <button 
+                        type="button"
+                        onClick={() => { setEditingFaculty(null); setFacultyImageFile(null); }}
+                        className="px-4 py-2 rounded-xl text-sm font-bold text-slate-300 hover:bg-white/5 transition"
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        type="submit"
+                        disabled={isSavingFaculty}
+                        className="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded-xl text-sm font-bold text-white transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {isSavingFaculty && <div className="h-4 w-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />}
+                        {isSavingFaculty ? "Saving..." : "Save Details"}
+                      </button>
+                    </div>
+                  </form>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
         </main>
       </div>
     </div>

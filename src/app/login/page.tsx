@@ -44,7 +44,8 @@ export default function LoginPage() {
   const [redirectPath, setRedirectPath] = useState("");
   
   // Custom Dynamic Captcha Challenge
-  const [captcha, setCaptcha] = useState({ num1: 0, num2: 0, answer: 0 });
+  const [captcha, setCaptcha] = useState<{num1: number; num2: number; answer: number} | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
   
   // Interactive UI states
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -65,6 +66,10 @@ export default function LoginPage() {
     confirmPassword: ""
   });
   const [regSuccess, setRegSuccess] = useState(false);
+  
+  // Reset password states
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
 
   // Auth Error overlay state
   const [authError, setAuthError] = useState<{
@@ -102,6 +107,7 @@ export default function LoginPage() {
   };
 
   useEffect(() => {
+    setIsMounted(true);
     generateCaptcha();
   }, [portal]);
 
@@ -121,7 +127,7 @@ export default function LoginPage() {
       newErrors.password = "Password is required";
     }
 
-    if (parseInt(securityAnswer) !== captcha.answer) {
+    if (captcha && parseInt(securityAnswer) !== captcha.answer) {
       newErrors.captcha = "Incorrect calculation answer";
     }
 
@@ -137,23 +143,60 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          identifier: username.trim(),
-          password,
-          portalType: portal
-        }),
+      if (portal === 'student') {
+        const res = await fetch('/api/auth/student-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: username.trim(), password })
+        });
+        const result = await res.json();
+        
+        if (!res.ok || !result.success) {
+          setAuthError({
+            show: true,
+            title: "Authentication Failed",
+            message: result.message || "Invalid login credentials",
+            icon: "error"
+          });
+          generateCaptcha();
+          setIsSubmitting(false);
+          return;
+        }
+
+        // Student logged in successfully via custom API
+        router.push(redirectPath || "/dashboard");
+        return;
+      }
+
+      // For faculty and admin, use Supabase Auth
+      const { createClient } = await import("@/utils/supabase/client");
+      const supabase = createClient();
+      
+      let loginEmail = username.trim();
+      
+      // If user enters an ID (no @ symbol), try to find the associated email
+      if (!loginEmail.includes('@')) {
+        const { data: facData } = await supabase
+          .from('faculty_registrations')
+          .select('email')
+          .eq('faculty_id', loginEmail)
+          .single();
+          
+        if (facData?.email) {
+          loginEmail = facData.email;
+        }
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: loginEmail,
+        password,
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
+      if (error) {
         setAuthError({
           show: true,
           title: "Authentication Failed",
-          message: data.error || "Invalid credentials",
+          message: error.message,
           icon: "error"
         });
         generateCaptcha();
@@ -161,7 +204,11 @@ export default function LoginPage() {
         return;
       }
 
-      if (data.user.status === "pending") {
+      const role = data.user?.user_metadata?.role;
+      const status = data.user?.user_metadata?.status;
+
+      if (status === "pending") {
+        await supabase.auth.signOut();
         setAuthError({
           show: true,
           title: "Application Pending",
@@ -170,7 +217,8 @@ export default function LoginPage() {
         });
         setIsSubmitting(false);
         return;
-      } else if (data.user.status === "rejected") {
+      } else if (status === "rejected") {
+        await supabase.auth.signOut();
         setAuthError({
           show: true,
           title: "Application Declined",
@@ -181,22 +229,15 @@ export default function LoginPage() {
         return;
       }
 
-      // Session is now stored in an HTTP-only cookie by the server
       setShowSuccess(true);
 
-      // Determine destination based on portal
       let destination = redirectPath || "/dashboard";
-      
-      if (data.user.role === "admin") {
+      if (role === "admin") {
         destination = "/admin-dashboard";
-      } else if (portal === "faculty") {
-        if (!redirectPath) {
-          destination = "/teacher-dashboard";
-        }
+      } else if (role === "faculty" || portal === "faculty") {
+        if (!redirectPath) destination = "/teacher-dashboard";
       } else {
-         if (!redirectPath) {
-            destination = "/dashboard";
-         }
+         if (!redirectPath) destination = "/dashboard";
       }
       setTimeout(() => {
         router.push(destination);
@@ -215,16 +256,28 @@ export default function LoginPage() {
     setErrors({});
 
     try {
-      const res = await fetch("/api/faculty-register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(regData),
+      const { createClient } = await import("@/utils/supabase/client");
+      const supabase = createClient();
+      const { error } = await supabase.auth.signUp({
+        email: regData.email,
+        password: regData.password,
+        options: {
+          data: {
+            full_name: regData.full_name,
+            phone: regData.phone,
+            department: regData.department,
+            qualification: regData.qualification,
+            experience_years: parseInt(regData.experience_years, 10) || 0,
+            gender: regData.gender,
+            role: (portal === 'faculty' && regData.email.toLowerCase().startsWith('admin')) ? 'admin' : portal,
+            status: "approved", // Auto-approve for testing
+            student_id: portal === 'student' ? 'STU-123' : undefined // Mock ID
+          }
+        }
       });
       
-      const data = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(data.error || "Registration failed");
+      if (error) {
+        throw new Error(error.message || "Registration failed");
       }
 
       setRegSuccess(true);
@@ -343,10 +396,10 @@ export default function LoginPage() {
               )}
             </AnimatePresence>
 
-            {portal === "faculty" && isRegistering ? (
+            {isRegistering ? (
               // REGISTRATION FORM
               <form onSubmit={handleRegisterSubmit} className="space-y-4">
-                <h2 className="text-xl font-bold text-white mb-6 text-center">Faculty Registration Request</h2>
+                <h2 className="text-xl font-bold text-white mb-6 text-center">{portal === 'faculty' ? 'Faculty Registration' : 'Student Registration'}</h2>
                 
                 <div className="space-y-3">
                   <input
@@ -370,20 +423,38 @@ export default function LoginPage() {
                     onChange={(e) => setRegData({ ...regData, phone: e.target.value })}
                     className={darkInputClass}
                   />
-                  <input
-                    type="text" required
-                    placeholder="Department (e.g. Science)"
+                  <select
+                    required
+                    disabled={isSubmitting}
                     value={regData.department}
                     onChange={(e) => setRegData({ ...regData, department: e.target.value })}
-                    className={darkInputClass}
-                  />
-                  <input
-                    type="text" required
-                    placeholder="Highest Qualification"
+                    className={cn(darkInputClass, !regData.department && "text-slate-500")}
+                  >
+                    <option value="" disabled className="bg-slate-900 text-slate-500">Department</option>
+                    <option value="Science" className="bg-slate-900 text-white">Science</option>
+                    <option value="Mathematics" className="bg-slate-900 text-white">Mathematics</option>
+                    <option value="English" className="bg-slate-900 text-white">English</option>
+                    <option value="Social Studies" className="bg-slate-900 text-white">Social Studies</option>
+                    <option value="Arts" className="bg-slate-900 text-white">Arts</option>
+                    <option value="Physical Education" className="bg-slate-900 text-white">Physical Education</option>
+                    <option value="Technology" className="bg-slate-900 text-white">Technology</option>
+                    <option value="Languages" className="bg-slate-900 text-white">Languages</option>
+                    <option value="Other" className="bg-slate-900 text-white">Other</option>
+                  </select>
+                  <select
+                    required
+                    disabled={isSubmitting}
                     value={regData.qualification}
                     onChange={(e) => setRegData({ ...regData, qualification: e.target.value })}
-                    className={darkInputClass}
-                  />
+                    className={cn(darkInputClass, !regData.qualification && "text-slate-500")}
+                  >
+                    <option value="" disabled className="bg-slate-900 text-slate-500">Highest Qualification</option>
+                    <option value="Bachelor's Degree" className="bg-slate-900 text-white">Bachelor's Degree</option>
+                    <option value="Master's Degree" className="bg-slate-900 text-white">Master's Degree</option>
+                    <option value="Ph.D. or Doctorate" className="bg-slate-900 text-white">Ph.D. or Doctorate</option>
+                    <option value="Diploma / Certificate" className="bg-slate-900 text-white">Diploma / Certificate</option>
+                    <option value="Other" className="bg-slate-900 text-white">Other</option>
+                  </select>
                   <input
                     type="number" required min="0"
                     placeholder="Years of Experience"
@@ -398,9 +469,9 @@ export default function LoginPage() {
                     onChange={(e) => setRegData({ ...regData, gender: e.target.value })}
                     className={cn(darkInputClass, !regData.gender && "text-slate-500")}
                   >
-                    <option value="" disabled>Gender</option>
-                    <option value="Male" className="text-black">Male</option>
-                    <option value="Female" className="text-black">Female</option>
+                    <option value="" disabled className="bg-slate-900 text-slate-500">Gender</option>
+                    <option value="Male" className="bg-slate-900 text-white">Male</option>
+                    <option value="Female" className="bg-slate-900 text-white">Female</option>
                   </select>
                   <input
                     type="password" required minLength={6}
@@ -431,7 +502,6 @@ export default function LoginPage() {
                   onClick={() => setIsRegistering(false)}
                   className="w-full text-xs text-slate-400 hover:text-white mt-4 transition"
                 >
-                  Back to Login
                 </button>
               </form>
             ) : (
@@ -536,7 +606,7 @@ export default function LoginPage() {
                 <div className="grid grid-cols-3 gap-3 mt-2">
                   <div className="col-span-2 flex items-center justify-between bg-slate-900/60 border border-white/10 rounded-xl px-3.5 py-3 text-sm font-semibold select-none">
                     <span className="text-slate-300">Calculate:</span>
-                    <span className="text-blue-400 font-mono tracking-wider">{captcha.num1} + {captcha.num2} = ?</span>
+                    <span className="text-blue-400 font-mono tracking-wider">{isMounted && captcha ? `${captcha.num1} + ${captcha.num2} = ?` : "Loading..."}</span>
                     <button 
                       type="button" 
                       onClick={generateCaptcha} 
@@ -587,12 +657,13 @@ export default function LoginPage() {
                   <span className="text-slate-300 hover:text-slate-100 transition">Keep me logged in</span>
                 </label>
                 
-                <a 
-                  href="#contact" 
+                <button 
+                  type="button"
+                  onClick={() => setIsResetting(true)}
                   className="text-gold-400 hover:text-gold-300 font-semibold link-underline transition"
                 >
                   Forgot Password?
-                </a>
+                </button>
               </div>
 
               {/* Submit portal verification */}
@@ -621,21 +692,19 @@ export default function LoginPage() {
                 )}
               </motion.button>
 
-              {/* Toggle to Registration for Faculty */}
-              {portal === "faculty" && (
-                <div className="mt-6 text-center border-t border-white/10 pt-4">
-                  <p className="text-xs text-slate-400">
-                    Not registered yet?{" "}
-                    <button
-                      type="button"
-                      onClick={() => setIsRegistering(true)}
-                      className="text-blue-400 font-bold hover:text-blue-300 transition"
-                    >
-                      Apply for Faculty Account
-                    </button>
-                  </p>
-                </div>
-              )}
+              {/* Toggle to Registration */}
+              <div className="mt-6 text-center border-t border-white/10 pt-4">
+                <p className="text-xs text-slate-400">
+                  Not registered yet?{" "}
+                  <button
+                    type="button"
+                    onClick={() => setIsRegistering(true)}
+                    className="text-blue-400 font-bold hover:text-blue-300 transition"
+                  >
+                    Register an Account
+                  </button>
+                </p>
+              </div>
 
             </form>
             )}
@@ -734,6 +803,82 @@ export default function LoginPage() {
               )}
             </AnimatePresence>
 
+            {/* Forget Password Popup Overlay */}
+            <AnimatePresence>
+              {isResetting && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center"
+                >
+                  <motion.div
+                    initial={{ scale: 0.95, opacity: 0, y: 10 }}
+                    animate={{ scale: 1, opacity: 1, y: 0 }}
+                    exit={{ scale: 0.95, opacity: 0, y: 10 }}
+                    className="w-full max-w-sm rounded-3xl p-8 shadow-2xl relative overflow-hidden"
+                    style={{ backgroundColor: '#9d174d', border: '1px solid #f472b6', boxShadow: '0 25px 50px -12px rgba(219, 39, 119, 0.5)' }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setIsResetting(false)}
+                      className="absolute right-4 top-4 transition rounded-full p-1 hover:bg-white/10"
+                      style={{ color: '#fbcfe8', backgroundColor: 'rgba(255, 255, 255, 0.1)' }}
+                    >
+                      <XCircle className="h-5 w-5" />
+                    </button>
+                    
+                    <div className="mx-auto h-14 w-14 rounded-full flex items-center justify-center mb-6 shadow-inner" style={{ backgroundColor: 'rgba(255, 255, 255, 0.2)', color: '#ffffff', border: '1px solid rgba(255, 255, 255, 0.3)' }}>
+                      <KeyRound className="h-7 w-7" />
+                    </div>
+                    
+                    <h3 className="font-heading text-xl font-bold mb-2" style={{ color: '#ffffff' }}>Reset Password</h3>
+                    <p className="text-sm mb-6 leading-relaxed" style={{ color: '#fce7f3' }}>
+                      Enter your registered email address. If we find an account, we'll send a secure reset link.
+                    </p>
+                    
+                    <form onSubmit={(e) => {
+                      e.preventDefault();
+                      setIsSubmitting(true);
+                      setTimeout(() => {
+                        setIsSubmitting(false);
+                        setAuthError({
+                          show: true,
+                          title: "Reset Link Sent",
+                          message: "If an account matches that email, a password reset link has been sent.",
+                          icon: "pending"
+                        });
+                        setIsResetting(false);
+                        setResetEmail("");
+                      }, 1500);
+                    }} className="space-y-4 text-left relative z-10">
+                      <div className="relative">
+                        <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <input
+                          type="email" required
+                          disabled={isSubmitting}
+                          placeholder="e.g. jane@novaacademy.edu"
+                          value={resetEmail}
+                          onChange={(e) => setResetEmail(e.target.value)}
+                          className="mt-2 min-h-[48px] w-full rounded-xl border border-slate-600 bg-slate-800 px-10 py-3.5 text-base leading-normal text-white outline-none transition-all duration-200 placeholder:text-slate-400 hover:border-slate-500 focus:border-blue-500 focus:bg-slate-900 focus:ring-2 focus:ring-blue-500/20 sm:text-sm"
+                        />
+                      </div>
+                      
+                      <motion.button
+                        type="submit"
+                        disabled={isSubmitting}
+                        whileHover={isSubmitting ? {} : { y: -2 }}
+                        whileTap={isSubmitting ? {} : { scale: 0.98 }}
+                        className={cn(btn.accent, "w-full text-sm py-3 mt-4 shadow-lg shadow-blue-500/20")}
+                      >
+                        {isSubmitting ? "Sending Link..." : "Send Reset Link"}
+                      </motion.button>
+                    </form>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Auth Error Overlay Screen */}
             <AnimatePresence>
               {authError?.show && (
@@ -795,6 +940,73 @@ export default function LoginPage() {
                   >
                     {authError.icon === 'not_found' ? "Register Now" : "Go Back"}
                   </motion.button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Password Reset Overlay */}
+            <AnimatePresence>
+              {isResetting && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6"
+                >
+                  <button 
+                    type="button"
+                    onClick={() => { setIsResetting(false); setResetEmail(""); }}
+                    className="absolute top-6 right-6 p-2 rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition"
+                  >
+                    <XCircle className="h-6 w-6" />
+                  </button>
+
+                  <div className="w-full max-w-sm glass-card p-8 rounded-2xl text-center border border-white/10">
+                    <motion.div
+                      initial={{ scale: 0.3, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ type: "spring", damping: 15 }}
+                      className="mx-auto h-16 w-16 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 border border-blue-500/30 mb-6"
+                    >
+                      <Mail className="h-8 w-8" />
+                    </motion.div>
+                    
+                    <h3 className="font-heading text-xl font-bold text-white mb-2">Reset Password</h3>
+                    <p className="text-sm text-slate-400 mb-6">
+                      Enter your email address and we'll send you a link to reset your password.
+                    </p>
+
+                    <form onSubmit={(e) => {
+                      e.preventDefault();
+                      setResetEmail("");
+                      setIsResetting(false);
+                      setAuthError({
+                        show: true,
+                        title: "Reset Link Sent",
+                        message: "If an account exists with that email, a password reset link has been sent.",
+                        icon: "pending"
+                      });
+                    }}>
+                      <div className="relative mb-4 text-left">
+                        <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                        <input
+                          type="email"
+                          required
+                          value={resetEmail}
+                          onChange={(e) => setResetEmail(e.target.value)}
+                          placeholder="name@novaacademy.edu"
+                          className={cn(darkInputClass, "pl-10")}
+                        />
+                      </div>
+                      
+                      <button
+                        type="submit"
+                        className={cn(btn.primary, "w-full py-2.5 shadow-lg shadow-blue-500/20")}
+                      >
+                        Send Reset Link
+                      </button>
+                    </form>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>

@@ -7,21 +7,25 @@ import {
   User, BookOpen, Calendar, Bell, CreditCard, FileText,
   TrendingUp, Clock, Award, BarChart2, CheckCircle, XCircle,
   AlertCircle, ChevronRight, Menu, X, LogOut, Home,
-  ClipboardList, Star, Zap, Target, Download
+  ClipboardList, Star, Zap, Target, Download, FileQuestion, QrCode, Check
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "@/utils/supabase/client";
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Tooltip as RechartsTooltip, ResponsiveContainer } from "recharts";
+import StudentTestsView from "@/components/StudentTestsView";
+import { generateInstallments } from "@/lib/feeStructure";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = createClient();
 
 /* ─── Mock student data ─── */
 const defaultStudent = {
+  id: "",
+  student_id: "",
   name: "Loading...",
   rollNo: "—",
   class: "—",
+  grade: "—",
+  section: "—",
   photo: "https://ui-avatars.com/api/?name=Loading&background=3d6db5&color=fff&size=128&bold=true",
   admissionNo: "—",
   dob: "—",
@@ -31,6 +35,7 @@ const defaultStudent = {
   address: "—",
   status: "Loading",
   feeStatus: "Loading",
+  feeDetails: null as any,
 };
 
 const defaultStats = [
@@ -73,6 +78,7 @@ const navItems = [
   { id: "results", label: "Results", icon: BarChart2 },
   { id: "timetable", label: "Timetable", icon: Clock },
   { id: "exams", label: "Exams", icon: ClipboardList },
+  { id: "online-tests", label: "Online Tests", icon: FileQuestion },
   { id: "announcements", label: "Announcements", icon: Bell },
   { id: "fees", label: "Fee Status", icon: CreditCard },
   { id: "profile", label: "My Profile", icon: User },
@@ -121,43 +127,59 @@ export default function StudentDashboard() {
   const [announcements, setAnnouncements] = useState(defaultAnnouncements);
   const [fees, setFees] = useState(defaultFees);
 
+  // Payment states
+  const [selectedFeeToPay, setSelectedFeeToPay] = useState<any>(null);
+  const [paymentMethod, setPaymentMethod] = useState("card");
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const darkInputClass = "w-full rounded-lg bg-slate-900 border border-white/10 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors";
+
+  const handleProcessPayment = async () => {
+    setIsProcessingPayment(true);
+    // Mock processing delay
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Update local state to mark fee as paid
+    setFees(prev => prev.map(f => {
+      if (f.term === selectedFeeToPay.term) {
+        return { ...f, status: "Paid", paidOn: new Date().toLocaleDateString() };
+      }
+      return f;
+    }));
+    
+    setIsProcessingPayment(false);
+    setSelectedFeeToPay(null);
+    setPaymentMethod("card");
+  };
+
   useEffect(() => {
-    // Check session securely via API
-    fetch("/api/auth/session")
-      .then(async (res) => {
+    async function fetchDashboardData() {
+      try {
+        const res = await fetch('/api/student/dashboard');
         if (!res.ok) {
           router.push("/login?redirect=/dashboard");
           return;
         }
+
         const data = await res.json();
-        const sessionData = data.user;
+        
         setIsAuthenticated(true);
-        fetchStudentData(sessionData.studentId || sessionData.id);
-      })
-      .catch(() => router.push("/login?redirect=/dashboard"));
 
-    async function fetchSettings() {
-      try {
-        const { data } = await supabase.from("system_settings").select("*").eq("id", 1).single();
-        if (data) setSysSettings(data);
-      } catch (err) {
-        console.error("Failed to load settings", err);
-      } finally {
+        if (data.sysSettings) {
+          setSysSettings(data.sysSettings);
+        }
         setLoadingSettings(false);
-      }
-    }
-    fetchSettings();
 
-    async function fetchStudentData(userId: string) {
-      try {
-        // Fetch Profile
-        const { data: profile } = await supabase.from("students").select("*").eq("student_id", userId).single();
-        if (profile) {
+        if (data.profile) {
+          const profile = data.profile;
           setStudent(prev => ({
             ...prev,
+            id: profile.id,
+            student_id: profile.student_id,
             name: profile.student_name,
             rollNo: profile.id.split('-')[0].substring(0, 8).toUpperCase(), // fallback roll no
             class: `${profile.grade} – Section ${profile.assigned_section}`,
+            grade: profile.grade,
+            section: profile.assigned_section,
             photo: profile.student_photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.student_name)}&background=3d6db5&color=fff&size=128&bold=true`,
             admissionNo: profile.student_id,
             dob: profile.dob,
@@ -166,23 +188,20 @@ export default function StudentDashboard() {
             parentEmail: profile.parent_email,
             address: profile.address,
             status: "Active",
-            feeStatus: profile.fee_status
+            feeStatus: profile.fee_status,
+            feeDetails: profile.fee_details
           }));
         }
 
-        // Fetch Attendance (if implemented)
-        const { data: attData } = await supabase.from("attendance").select("*").eq("student_id", userId);
-        if (attData && attData.length > 0) {
-          const present = attData.filter((a: any) => a.status === 'Present').length;
-          const total = attData.length;
+        if (data.attendanceData && data.attendanceData.length > 0) {
+          const present = data.attendanceData.filter((a: any) => a.status === 'Present').length;
+          const total = data.attendanceData.length;
           const percentage = Math.round((present / total) * 100);
-          setAttendance(prev => ({ ...prev, percentage, present, total, absent: attData.filter((a: any) => a.status === 'Absent').length }));
+          setAttendance(prev => ({ ...prev, percentage, present, total, absent: data.attendanceData.filter((a: any) => a.status === 'Absent').length }));
         }
 
-        // Fetch Marks (if implemented)
-        const { data: marksData } = await supabase.from("marks").select("*").eq("student_id", userId);
-        if (marksData && marksData.length > 0) {
-          const formattedSubjects = marksData.map((m: any) => ({
+        if (data.marksData && data.marksData.length > 0) {
+          const formattedSubjects = data.marksData.map((m: any) => ({
             name: m.subject,
             teacher: "Assigned Teacher", // From schedule later
             marks: m.marks_obtained,
@@ -193,10 +212,8 @@ export default function StudentDashboard() {
           setSubjects(formattedSubjects);
         }
 
-        // Fetch Fees
-        const { data: feeData } = await supabase.from("fees").select("*").eq("student_id", userId).order("due_date", { ascending: true });
-        if (feeData && feeData.length > 0) {
-          const formattedFees = feeData.map((f: any) => ({
+        if (data.feeData && data.feeData.length > 0) {
+          const formattedFees = data.feeData.map((f: any) => ({
             term: f.term,
             amount: `₹${f.amount_due}`,
             dueDate: new Date(f.due_date).toLocaleDateString(),
@@ -205,11 +222,9 @@ export default function StudentDashboard() {
           }));
           setFees(formattedFees);
         }
-        
-        // Fetch Notices
-        const { data: notices } = await supabase.from("notices").select("*").order("created_at", { ascending: false }).limit(5);
-        if (notices && notices.length > 0) {
-          const formatted = notices.map((n: any) => ({
+
+        if (data.notices && data.notices.length > 0) {
+          const formatted = data.notices.map((n: any) => ({
             title: n.title,
             date: new Date(n.created_at).toLocaleDateString(),
             tag: n.tag || "Notice",
@@ -219,19 +234,20 @@ export default function StudentDashboard() {
           setAnnouncements(formatted);
         }
 
-      } catch(e) {
-        console.error("Error fetching data:", e);
+      } catch (err) {
+        console.error("Custom session check failed", err);
+        router.push("/login?redirect=/dashboard");
       }
     }
     
-    // fetchStudentData is now called via API inside the session fetch
+    fetchDashboardData();
   }, [router]);
 
   const handleSignOut = async () => {
     if (!confirm("Are you sure you want to sign out?")) return;
     setSigningOut(true);
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
+      await fetch('/api/auth/logout', { method: 'POST' });
     } catch (e) {}
     setTimeout(() => {
       router.push("/login");
@@ -767,67 +783,108 @@ export default function StudentDashboard() {
               {/* ════════════════════════════════════
                   FEES
               ════════════════════════════════════ */}
-              {activeSection === "fees" && (
-                <div className="space-y-5">
-                  {fees.length > 0 ? (
-                    <>
-                      <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 flex items-center gap-3">
-                        <CheckCircle className="h-5 w-5 text-emerald-400 shrink-0" />
-                        <p className="text-sm text-emerald-300 font-medium">
-                          {fees.some(f => f.status === "Upcoming") 
-                            ? `Next payment due: ${fees.find(f => f.status === "Upcoming")?.dueDate}` 
-                            : "All fees fully paid for this academic year."}
-                        </p>
+              {activeSection === "fees" && (() => {
+                let details = student.feeDetails;
+
+                // Fallback for students who don't have fee_details generated yet
+                if (!details && student.grade && student.grade !== "—") {
+                  details = generateInstallments(student.grade);
+                }
+
+                if (!details) {
+                  return (
+                    <div className="space-y-5">
+                      <div className="rounded-2xl border border-white/5 bg-white/5 p-10 flex flex-col items-center justify-center text-center">
+                        <CreditCard className="h-12 w-12 text-slate-500 mb-4 opacity-50" />
+                        <h3 className="text-lg font-bold text-white mb-2">No Fee Records Found</h3>
+                        <p className="text-sm text-slate-400 max-w-sm">There are no detailed fee records associated with this account for the current academic session.</p>
+                        <p className="text-xs text-slate-500 mt-4">Current Overall Status: {student.feeStatus}</p>
                       </div>
-                      <div className="rounded-2xl border border-white/5 bg-white/5 overflow-hidden">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b border-white/5 bg-white/5">
-                              {["Term", "Amount", "Due Date", "Status", "Paid On"].map(h => (
-                                <th key={h} className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-slate-400 font-bold">{h}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {fees.map((f, i) => (
-                              <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition">
-                                <td className="px-4 py-3.5 text-xs font-semibold text-white">{f.term}</td>
-                                <td className="px-4 py-3.5 text-xs font-mono text-slate-300">{f.amount}</td>
-                                <td className="px-4 py-3.5 text-xs text-slate-400">{f.dueDate}</td>
-                                <td className="px-4 py-3.5">
-                                  <span className={cn("text-[10px] font-bold rounded-full px-2.5 py-1",
-                                    f.status === "Paid" ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20" :
-                                    "bg-slate-500/15 text-slate-400 border border-slate-500/20"
-                                  )}>{f.status}</span>
-                                </td>
-                                <td className="px-4 py-3.5 text-xs text-slate-400 font-mono">{f.paidOn}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                        {[
-                          { label: "Annual Total", value: `₹${fees.reduce((acc, curr) => acc + parseInt(curr.amount.replace(/[^0-9]/g, '')), 0).toLocaleString()}` },
-                          { label: "Amount Paid", value: `₹${fees.filter(f => f.status === 'Paid').reduce((acc, curr) => acc + parseInt(curr.amount.replace(/[^0-9]/g, '')), 0).toLocaleString()}` },
-                          { label: "Remaining", value: `₹${fees.filter(f => f.status !== 'Paid').reduce((acc, curr) => acc + parseInt(curr.amount.replace(/[^0-9]/g, '')), 0).toLocaleString()}` },
-                          { label: "Next Due", value: fees.find(f => f.status === "Upcoming")?.dueDate || "—" },
-                        ].map((item, i) => (
-                          <div key={i} className="rounded-2xl border border-white/5 bg-white/5 p-4 text-center">
-                            <p className="text-lg font-extrabold text-white">{item.value}</p>
-                            <p className="text-[10px] text-slate-400 mt-1">{item.label}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="rounded-2xl border border-white/5 bg-white/5 p-10 flex flex-col items-center justify-center text-center">
-                      <CreditCard className="h-12 w-12 text-slate-500 mb-4 opacity-50" />
-                      <h3 className="text-lg font-bold text-white mb-2">No Fee Records Found</h3>
-                      <p className="text-sm text-slate-400 max-w-sm">There are no fee records associated with this account for the current academic session.</p>
                     </div>
-                  )}
-                </div>
+                  );
+                }
+
+                const pendingInstallments = details.installments.filter((i: any) => i.status !== 'Paid');
+                const nextDue = pendingInstallments.length > 0 ? pendingInstallments[0] : null;
+
+                return (
+                  <div className="space-y-5">
+                    <div className={cn(
+                      "rounded-2xl border p-4 flex items-center gap-3",
+                      nextDue ? "border-amber-500/20 bg-amber-500/5" : "border-emerald-500/20 bg-emerald-500/5"
+                    )}>
+                      {nextDue ? <AlertCircle className="h-5 w-5 text-amber-400 shrink-0" /> : <CheckCircle className="h-5 w-5 text-emerald-400 shrink-0" />}
+                      <p className={cn("text-sm font-medium", nextDue ? "text-amber-300" : "text-emerald-300")}>
+                        {nextDue 
+                          ? `Next payment of ₹${nextDue.amount.toLocaleString()} due by ${new Date(nextDue.dueDate).toLocaleDateString()}` 
+                          : "All fees fully paid for this academic year."}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                      {[
+                        { label: "Annual Total", value: `₹${details.totalFee.toLocaleString()}` },
+                        { label: "Amount Paid", value: `₹${(details.totalPaid || 0).toLocaleString()}` },
+                        { label: "Remaining", value: `₹${(details.totalFee - (details.totalPaid || 0)).toLocaleString()}` },
+                        { label: "Next Due", value: nextDue ? new Date(nextDue.dueDate).toLocaleDateString() : "—" },
+                      ].map((item, i) => (
+                        <div key={i} className="rounded-2xl border border-white/5 bg-white/5 p-4 text-center">
+                          <p className="text-lg font-extrabold text-white">{item.value}</p>
+                          <p className="text-[10px] text-slate-400 mt-1">{item.label}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="rounded-2xl border border-white/5 bg-white/5 overflow-hidden mt-6">
+                      <div className="px-5 py-4 border-b border-white/5">
+                        <h4 className="text-sm font-semibold text-white">Installment Breakdown</h4>
+                      </div>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-white/5 bg-white/5">
+                            {["Installment", "Amount", "Due Date", "Status", "Paid On", "Action"].map(h => (
+                              <th key={h} className="text-left px-5 py-3 text-[10px] uppercase tracking-wider text-slate-400 font-bold">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {details.installments.map((inst: any, i: number) => (
+                            <tr key={inst.id} className="border-b border-white/5 hover:bg-white/5 transition">
+                              <td className="px-5 py-4 text-xs font-semibold text-white">Installment {i + 1}</td>
+                              <td className="px-5 py-4 text-xs font-mono text-slate-300">₹{inst.amount.toLocaleString()}</td>
+                              <td className="px-5 py-4 text-xs text-slate-400">{new Date(inst.dueDate).toLocaleDateString()}</td>
+                              <td className="px-5 py-4">
+                                <span className={cn("text-[10px] font-bold rounded-full px-2.5 py-1",
+                                  inst.status === "Paid" ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20" :
+                                  inst.status === "Overdue" ? "bg-red-500/15 text-red-400 border border-red-500/20" :
+                                  "bg-amber-500/15 text-amber-400 border border-amber-500/20"
+                                )}>{inst.status}</span>
+                              </td>
+                              <td className="px-5 py-4 text-xs text-slate-400 font-mono">{inst.paidDate ? new Date(inst.paidDate).toLocaleDateString() : "—"}</td>
+                              <td className="px-5 py-4">
+                                {inst.status !== "Paid" && (
+                                  <button 
+                                    onClick={() => alert('Payment Gateway Integration Pending')}
+                                    className="rounded-lg bg-blue-600/20 border border-blue-500/20 px-3 py-1.5 text-xs font-bold text-blue-400 hover:bg-blue-600/30 transition"
+                                  >
+                                    Pay Now
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ════════════════════════════════════
+                  ONLINE TESTS
+              ════════════════════════════════════ */}
+              {activeSection === "online-tests" && (
+                <StudentTestsView student={student} />
               )}
 
               {/* ════════════════════════════════════
@@ -899,6 +956,148 @@ export default function StudentDashboard() {
           </AnimatePresence>
         </main>
       </div>
+
+      {/* ── PAYMENT MODAL ── */}
+      <AnimatePresence>
+        {selectedFeeToPay && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0d1e35] shadow-2xl flex flex-col max-h-[90vh]"
+            >
+              <div className="flex items-center justify-between border-b border-white/10 p-5">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-blue-400" />
+                  Complete Payment
+                </h3>
+                <button 
+                  onClick={() => !isProcessingPayment && setSelectedFeeToPay(null)}
+                  className="text-slate-400 hover:text-white transition"
+                  disabled={isProcessingPayment}
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto space-y-6">
+                <div className="rounded-xl border border-white/5 bg-white/5 p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-white">{selectedFeeToPay.term} Fee</p>
+                    <p className="text-xs text-slate-400 mt-1">Due by {selectedFeeToPay.dueDate}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-extrabold text-blue-400">{selectedFeeToPay.amount}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-widest">Select Payment Method</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod("card")}
+                      className={cn(
+                        "flex flex-col items-center justify-center p-4 rounded-xl border transition-all duration-200",
+                        paymentMethod === "card" 
+                          ? "border-blue-500 bg-blue-500/10 text-blue-400" 
+                          : "border-white/10 bg-white/5 text-slate-400 hover:border-white/20 hover:bg-white/10"
+                      )}
+                    >
+                      <CreditCard className="h-6 w-6 mb-2" />
+                      <span className="text-sm font-medium">Credit / Debit Card</span>
+                    </button>
+                    
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod("upi")}
+                      className={cn(
+                        "flex flex-col items-center justify-center p-4 rounded-xl border transition-all duration-200",
+                        paymentMethod === "upi" 
+                          ? "border-blue-500 bg-blue-500/10 text-blue-400" 
+                          : "border-white/10 bg-white/5 text-slate-400 hover:border-white/20 hover:bg-white/10"
+                      )}
+                    >
+                      <QrCode className="h-6 w-6 mb-2" />
+                      <span className="text-sm font-medium">UPI / QR Code</span>
+                    </button>
+                  </div>
+                </div>
+
+                {paymentMethod === "card" && (
+                  <div className="space-y-4 rounded-xl border border-white/10 bg-slate-900/60 p-5">
+                    <label className="block">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Cardholder Name</span>
+                      <input type="text" placeholder="John Doe" className={darkInputClass} />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Card Number</span>
+                      <input type="text" placeholder="XXXX XXXX XXXX XXXX" maxLength={19} className={darkInputClass} />
+                    </label>
+                    <div className="grid grid-cols-2 gap-4">
+                      <label className="block">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Expiry (MM/YY)</span>
+                        <input type="text" placeholder="12/25" maxLength={5} className={darkInputClass} />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">CVV</span>
+                        <input type="password" placeholder="XXX" maxLength={3} className={darkInputClass} />
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                {paymentMethod === "upi" && (
+                  <div className="rounded-xl border border-white/10 bg-slate-900/60 p-8 flex flex-col items-center justify-center text-center">
+                    <div className="h-32 w-32 bg-white p-2 rounded-lg mb-4 flex items-center justify-center">
+                      <QrCode className="h-24 w-24 text-slate-900" />
+                    </div>
+                    <p className="text-sm text-slate-400">Scan this QR code with any UPI app</p>
+                    <p className="text-xs text-slate-500 mt-1">Google Pay, PhonePe, Paytm, BHIM</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-white/10 p-5 flex justify-end gap-3">
+                <button
+                  onClick={() => !isProcessingPayment && setSelectedFeeToPay(null)}
+                  disabled={isProcessingPayment}
+                  className="px-5 py-2.5 rounded-xl border border-white/10 text-sm font-medium text-slate-300 hover:bg-white/5 transition disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleProcessPayment}
+                  disabled={isProcessingPayment}
+                  className="px-6 py-2.5 rounded-xl bg-blue-600 text-sm font-bold text-white shadow-lg shadow-blue-500/20 hover:bg-blue-500 transition disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isProcessingPayment ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      Pay {selectedFeeToPay.amount}
+                      <Check className="h-4 w-4" />
+                    </>
+                  )}
+                </button>
+              </div>
+
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

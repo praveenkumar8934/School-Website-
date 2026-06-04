@@ -7,11 +7,12 @@ import {
   BookOpen, Users, BarChart2, Bell, ClipboardList, LogOut,
   Menu, X, ChevronRight, Home, User, Clock, CheckCircle,
   XCircle, AlertCircle, Search, Eye, TrendingUp, Award,
-  Calendar, FileText, ChevronDown, ChevronUp, Pencil, Save, Lock
+  Calendar, FileText, ChevronDown, ChevronUp, Pencil, Save, Lock, FileQuestion, Plus, Trash2, Edit3
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@supabase/supabase-js";
 import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from "recharts";
+import OnlineTestsView from "@/components/OnlineTestsView";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -56,6 +57,7 @@ const navItems = [
   { id: "attendance",  label: "Attendance",     icon: CheckCircle },
   { id: "marks",       label: "Marks & Results",icon: BarChart2 },
   { id: "schedule",    label: "Class Schedule", icon: Clock },
+  { id: "online-tests",label: "Online Tests",   icon: FileQuestion },
   { id: "notices",     label: "Notices",        icon: Bell },
   { id: "profile",     label: "My Profile",     icon: User },
 ];
@@ -473,6 +475,22 @@ export default function TeacherDashboard() {
     }
   };
 
+  const classPerformanceData = useMemo(() => {
+    if (!classStudents || classStudents.length === 0) return [];
+    // Group by average range
+    const ranges = { "90-100": 0, "80-89": 0, "70-79": 0, "60-69": 0, "<60": 0 };
+    classStudents.forEach(s => {
+      const m = avgMark(s.marks);
+      if (m === null) return;
+      if (m >= 90) ranges["90-100"]++;
+      else if (m >= 80) ranges["80-89"]++;
+      else if (m >= 70) ranges["70-79"]++;
+      else if (m >= 60) ranges["60-69"]++;
+      else ranges["<60"]++;
+    });
+    return Object.keys(ranges).map(k => ({ range: k, students: ranges[k as keyof typeof ranges] }));
+  }, [classStudents]);
+
   const avgAttendance = classStudents.length > 0 ? Math.round(classStudents.reduce((a, s) => a + s.attendance.pct, 0) / classStudents.length) : 0;
   const validAvgs = classStudents.map(s => avgMark(s.marks)).filter(v => v !== null) as number[];
   const avgScore = validAvgs.length > 0 ? Math.round(validAvgs.reduce((a, b) => a + b, 0) / validAvgs.length) : 0;
@@ -507,21 +525,6 @@ export default function TeacherDashboard() {
     );
   }
 
-  const classPerformanceData = useMemo(() => {
-    if (!classStudents || classStudents.length === 0) return [];
-    // Group by average range
-    const ranges = { "90-100": 0, "80-89": 0, "70-79": 0, "60-69": 0, "<60": 0 };
-    classStudents.forEach(s => {
-      const m = avgMark(s.marks);
-      if (m === null) return;
-      if (m >= 90) ranges["90-100"]++;
-      else if (m >= 80) ranges["80-89"]++;
-      else if (m >= 70) ranges["70-79"]++;
-      else if (m >= 60) ranges["60-69"]++;
-      else ranges["<60"]++;
-    });
-    return Object.keys(ranges).map(k => ({ range: k, students: ranges[k as keyof typeof ranges] }));
-  }, [classStudents]);
 
   return (
     <div className="flex min-h-screen bg-[#0a1628] text-slate-100 font-sans">
@@ -1266,6 +1269,13 @@ export default function TeacherDashboard() {
                     ))
                   )}
                 </div>
+              )}
+
+              {/* ════════════════
+                  ONLINE TESTS
+              ════════════════ */}
+              {activeSection === "online-tests" && (
+                <OnlineTestsView teacher={teacher} />
               )}
 
               {/* ════════════════
