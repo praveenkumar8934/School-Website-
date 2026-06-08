@@ -3,7 +3,11 @@ import { createClient } from "@/utils/supabase/server";
 import { jwtVerify } from "jose";
 import { cookies } from "next/headers";
 
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'fallback_secret_for_development_only');
+const JWT_SECRET_STRING = process.env.JWT_SECRET;
+if (!JWT_SECRET_STRING) {
+  throw new Error('JWT_SECRET is not set in environment variables');
+}
+const JWT_SECRET = new TextEncoder().encode(JWT_SECRET_STRING);
 
 export async function GET() {
   const cookieStore = await cookies();

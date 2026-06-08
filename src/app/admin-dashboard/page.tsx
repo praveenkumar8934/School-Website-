@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { createClient } from "@supabase/supabase-js";
+
 import {
   Users, UserPlus, BookOpen, Settings, LogOut,
   Menu, X, ChevronRight, Home, Shield, DollarSign,
@@ -38,14 +38,12 @@ const navItems = [
   { id: "settings",   label: "System Settings",icon: Settings },
 ];
 
+import { createClient } from "@/utils/supabase/client";
+
 /* ═══════════════════════════════════════════════
    SUPABASE CLIENT
 ═══════════════════════════════════════════════ */
-// Note: In a real app, use environment variables and secure server actions.
-// Here we are using public keys for client-side fetching as a demonstration.
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = createClient();
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -112,9 +110,14 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     // Check session securely via API
-    fetch("/api/auth/session").then(res => {
+    fetch("/api/auth/session").then(async res => {
       if (res.ok) {
-        setIsAuthenticated(true);
+        const data = await res.json();
+        if (data.user && data.user.role === "admin") {
+          setIsAuthenticated(true);
+        } else {
+          router.push("/login?redirect=/admin-dashboard");
+        }
       } else {
         router.push("/login?redirect=/admin-dashboard");
       }
@@ -150,11 +153,6 @@ export default function AdminDashboard() {
   const fetchAdmissions = async () => {
     setLoadingAdmissions(true);
     try {
-      if (!supabaseUrl || !supabaseAnonKey) {
-        console.warn("Supabase keys missing. Cannot fetch live data.");
-        setAdmissions([]);
-        return;
-      }
       const { data, error } = await supabase
         .from("admission_form")
         .select("*")
@@ -172,7 +170,6 @@ export default function AdminDashboard() {
   const fetchStudents = async () => {
     setLoadingStudents(true);
     try {
-      if (!supabaseUrl || !supabaseAnonKey) return;
       const { data, error } = await supabase
         .from("students")
         .select("*")
@@ -211,13 +208,16 @@ export default function AdminDashboard() {
     if (!student) return;
 
     let feeDetails = student.fee_details;
+    if (typeof feeDetails === "string") {
+      try { feeDetails = JSON.parse(feeDetails); } catch (e) {}
+    }
     if (!feeDetails) {
       feeDetails = generateInstallments(student.grade);
     }
 
-    const updatedInstallments = feeDetails.installments.map((inst: any) => 
+    const updatedInstallments = feeDetails.installments?.map((inst: any) => 
       inst.id === installmentId ? { ...inst, status: newStatus, paidDate: newStatus === 'Paid' ? new Date().toISOString() : null } : inst
-    );
+    ) || [];
 
     const totalPaid = updatedInstallments.filter((i: any) => i.status === 'Paid').reduce((acc: number, curr: any) => acc + curr.amount, 0);
     const allPaid = updatedInstallments.every((i: any) => i.status === 'Paid');
@@ -251,7 +251,6 @@ export default function AdminDashboard() {
   const fetchNotices = async () => {
     setLoadingNotices(true);
     try {
-      if (!supabaseUrl || !supabaseAnonKey) return;
       const { data, error } = await supabase
         .from("notices")
         .select("*")
@@ -569,10 +568,6 @@ export default function AdminDashboard() {
   const fetchFacultyRegistrations = async () => {
     setLoadingFaculty(true);
     try {
-      if (!supabaseUrl || !supabaseAnonKey) {
-        setFacultyRequests([]);
-        return;
-      }
       const { data, error } = await supabase
         .from("faculty_registrations")
         .select("*")
@@ -720,7 +715,6 @@ export default function AdminDashboard() {
   };
 
   const handleSignOut = async () => {
-    if (!confirm("Are you sure you want to sign out?")) return;
     setSigningOut(true);
     try {
       await fetch("/api/auth/logout", { method: "POST" });
@@ -1488,6 +1482,14 @@ export default function AdminDashboard() {
                             <div className="overflow-y-auto pr-2 custom-scrollbar flex-1">
                               {(() => {
                                 let details = selectedStudentForFees.fee_details;
+                                if (typeof details === "string") {
+                                  try {
+                                    details = JSON.parse(details);
+                                  } catch (e) {
+                                    console.error("Failed to parse fee details", e);
+                                  }
+                                }
+
                                 if (!details && selectedStudentForFees.grade && selectedStudentForFees.grade !== "—") {
                                   details = generateInstallments(selectedStudentForFees.grade);
                                 }

@@ -44,6 +44,23 @@ export async function POST(request: NextRequest) {
     const saltRounds = 10;
     const passwordHash = await bcrypt.hash(data.password, saltRounds);
 
+    // 1.5 Check if email is already registered
+    const { data: existingUser, error: checkError } = await supabase
+      .from("admission_form")
+      .select("id")
+      .eq("parent_email", data.parentEmail.trim().toLowerCase())
+      .single();
+
+    if (existingUser) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          message: "An admission application is already registered with this parent's email address. Please use the Student Portal to check your status." 
+        },
+        { status: 409 }
+      );
+    }
+
     // 2. Insert record into Supabase public.admission_form table
     const { error } = await supabase
       .from("admission_form")
@@ -73,8 +90,8 @@ export async function POST(request: NextRequest) {
           pin_code: data.pinCode.trim(),
           status: "pending",
           password_hash: passwordHash,
-          payment_status: data.paymentStatus || "pending",
-          payment_id: data.paymentId || null
+          payment_status: "pending",
+          payment_id: null
         }
       ]);
 

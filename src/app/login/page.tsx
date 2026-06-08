@@ -44,7 +44,7 @@ export default function LoginPage() {
   const [redirectPath, setRedirectPath] = useState("");
   
   // Custom Dynamic Captcha Challenge
-  const [captcha, setCaptcha] = useState<{num1: number; num2: number; answer: number} | null>(null);
+  const [captcha, setCaptcha] = useState<{question: string; token: string} | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   
   // Interactive UI states
@@ -94,16 +94,16 @@ export default function LoginPage() {
     captcha?: string;
   }>({});
 
-  // Generate new math captcha
-  const generateCaptcha = () => {
-    const num1 = Math.floor(Math.random() * 9) + 1;
-    const num2 = Math.floor(Math.random() * 9) + 1;
-    setCaptcha({
-      num1,
-      num2,
-      answer: num1 + num2
-    });
-    setSecurityAnswer("");
+  // Generate new math captcha from server API
+  const generateCaptcha = async () => {
+    try {
+      const res = await fetch("/api/auth/captcha");
+      const data = await res.json();
+      setCaptcha(data);
+      setSecurityAnswer("");
+    } catch (err) {
+      console.error("Failed to load captcha");
+    }
   };
 
   useEffect(() => {
@@ -127,8 +127,8 @@ export default function LoginPage() {
       newErrors.password = "Password is required";
     }
 
-    if (captcha && parseInt(securityAnswer) !== captcha.answer) {
-      newErrors.captcha = "Incorrect calculation answer";
+    if (!securityAnswer) {
+      newErrors.captcha = "Captcha answer is required";
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -141,6 +141,27 @@ export default function LoginPage() {
     // Clear previous validation errors
     setErrors({});
     setIsSubmitting(true);
+
+    // Verify Captcha on server
+    try {
+      const captchaRes = await fetch("/api/auth/verify-captcha", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answer: securityAnswer, token: captcha?.token })
+      });
+      const captchaResult = await captchaRes.json();
+      if (!captchaResult.success) {
+        setErrors({ captcha: "Incorrect calculation answer" });
+        generateCaptcha();
+        setIsSubmitting(false);
+        return;
+      }
+    } catch (err) {
+      setErrors({ captcha: "Failed to verify captcha" });
+      generateCaptcha();
+      setIsSubmitting(false);
+      return;
+    }
 
     try {
       if (portal === 'student') {
@@ -232,7 +253,9 @@ export default function LoginPage() {
       setShowSuccess(true);
 
       let destination = redirectPath || "/dashboard";
-      if (role === "admin") {
+      const userEmail = data.user?.email?.toLowerCase() || "";
+      
+      if (role === "admin" || userEmail.startsWith("admin")) {
         destination = "/admin-dashboard";
       } else if (role === "faculty" || portal === "faculty") {
         if (!redirectPath) destination = "/teacher-dashboard";
@@ -269,8 +292,8 @@ export default function LoginPage() {
             qualification: regData.qualification,
             experience_years: parseInt(regData.experience_years, 10) || 0,
             gender: regData.gender,
-            role: (portal === 'faculty' && regData.email.toLowerCase().startsWith('admin')) ? 'admin' : portal,
-            status: "approved", // Auto-approve for testing
+            role: portal === "student" ? "student" : "faculty",
+            status: "pending", // Pending manual approval
             student_id: portal === 'student' ? 'STU-123' : undefined // Mock ID
           }
         }
@@ -606,7 +629,7 @@ export default function LoginPage() {
                 <div className="grid grid-cols-3 gap-3 mt-2">
                   <div className="col-span-2 flex items-center justify-between bg-slate-900/60 border border-white/10 rounded-xl px-3.5 py-3 text-sm font-semibold select-none">
                     <span className="text-slate-300">Calculate:</span>
-                    <span className="text-blue-400 font-mono tracking-wider">{isMounted && captcha ? `${captcha.num1} + ${captcha.num2} = ?` : "Loading..."}</span>
+                    <span className="text-blue-400 font-mono tracking-wider">{isMounted && captcha ? captcha.question : "Loading..."}</span>
                     <button 
                       type="button" 
                       onClick={generateCaptcha} 

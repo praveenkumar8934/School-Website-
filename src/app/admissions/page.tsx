@@ -94,6 +94,7 @@ export default function AdmissionsPage() {
 
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
   const [submittedData, setSubmittedData] = useState<AdmissionsFormValues | null>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
@@ -120,6 +121,8 @@ export default function AdmissionsPage() {
   const [aadharImageName, setAadharImageName] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [uploadingAadhar, setUploadingAadhar] = useState(false);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [aadharFile, setAadharFile] = useState<File | null>(null);
 
   const fileInputPhotoRef = useRef<HTMLInputElement>(null);
   const fileInputAadharRef = useRef<HTMLInputElement>(null);
@@ -259,8 +262,8 @@ export default function AdmissionsPage() {
     }
   };
 
-  // Custom File Uploader triggers — uploads to Supabase Storage bucket
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Custom File Uploader triggers — handles file selection only
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -269,40 +272,17 @@ export default function AdmissionsPage() {
       return;
     }
 
-    setUploadingPhoto(true);
+    setPhotoFile(file);
 
     // Show local preview immediately for better UX
     const reader = new FileReader();
     reader.onloadend = () => setPhotoPreview(reader.result as string);
     reader.readAsDataURL(file);
 
-    try {
-      const ext = file.name.split(".").pop();
-      const fileName = `photos/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("admissions")
-        .upload(fileName, file, { cacheControl: "3600", upsert: false });
-
-      if (uploadError) throw uploadError;
-
-      const { data } = supabase.storage
-        .from("admissions")
-        .getPublicUrl(fileName);
-
-      setValue("studentPhoto", data.publicUrl, { shouldValidate: true });
-    } catch (err) {
-      console.error("Photo upload failed:", err);
-      alert("Failed to upload photo. Please check your bucket settings and try again.");
-      setPhotoPreview(null);
-      setValue("studentPhoto", "", { shouldValidate: true });
-    } finally {
-      setUploadingPhoto(false);
-    }
+    setValue("studentPhoto", file.name, { shouldValidate: true });
   };
 
-
-  const handleAadharUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAadharUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -311,47 +291,66 @@ export default function AdmissionsPage() {
       return;
     }
 
-    setUploadingAadhar(true);
-
-    try {
-      const ext = file.name.split(".").pop();
-      const fileName = `aadhar/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("admissions")
-        .upload(fileName, file, { cacheControl: "3600", upsert: false });
-
-      if (uploadError) throw uploadError;
-
-      const { data } = supabase.storage
-        .from("admissions")
-        .getPublicUrl(fileName);
-
-      setAadharImageName(file.name);
-      setValue("aadharImage", data.publicUrl, { shouldValidate: true });
-    } catch (err) {
-      console.error("Aadhar upload failed:", err);
-      alert("Failed to upload Aadhar image. Please try again.");
-      setAadharImageName(null);
-      setValue("aadharImage", "", { shouldValidate: true });
-    } finally {
-      setUploadingAadhar(false);
-    }
+    setAadharFile(file);
+    setAadharImageName(file.name);
+    setValue("aadharImage", file.name, { shouldValidate: true });
   };
 
   const onSubmit = async (data: AdmissionsFormValues) => {
     setIsSubmitting(true);
+    setSubmitError(null);
     try {
+      let finalPhotoUrl = data.studentPhoto;
+      let finalAadharUrl = data.aadharImage;
+
+      // Upload Photo
+      if (photoFile) {
+        setUploadingPhoto(true);
+        const ext = photoFile.name.split(".").pop();
+        const fileName = `photos/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from("admissions")
+          .upload(fileName, photoFile, { cacheControl: "3600", upsert: false });
+        
+        if (uploadError) throw uploadError;
+        
+        const { data: urlData } = supabase.storage.from("admissions").getPublicUrl(fileName);
+        finalPhotoUrl = urlData.publicUrl;
+        setUploadingPhoto(false);
+      }
+
+      // Upload Aadhar
+      if (aadharFile) {
+        setUploadingAadhar(true);
+        const ext = aadharFile.name.split(".").pop();
+        const fileName = `aadhar/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from("admissions")
+          .upload(fileName, aadharFile, { cacheControl: "3600", upsert: false });
+        
+        if (uploadError) throw uploadError;
+        
+        const { data: urlData } = supabase.storage.from("admissions").getPublicUrl(fileName);
+        finalAadharUrl = urlData.publicUrl;
+        setUploadingAadhar(false);
+      }
+
+      const payload = {
+        ...data,
+        studentPhoto: finalPhotoUrl,
+        aadharImage: finalAadharUrl,
+      };
+
       const response = await fetch("/api/admissions-submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       });
 
       const result = await response.json();
 
       if (!response.ok) {
-        alert(result.message || "Could not register admission. Please try again.");
+        setSubmitError(result.message || "Could not register admission. Please try again.");
         setIsSubmitting(false);
         return;
       }
@@ -363,11 +362,13 @@ export default function AdmissionsPage() {
       reset();
       setPhotoPreview(null);
       setAadharImageName(null);
+      setPhotoFile(null);
+      setAadharFile(null);
       setCurrentStep(0);
       setPaymentMethod("card");
     } catch (err) {
       console.error("Submission failed:", err);
-      alert("Submission error. Please check your network connection.");
+      setSubmitError("Submission error. Please check your network connection.");
     } finally {
       setIsSubmitting(false);
     }
@@ -1159,6 +1160,25 @@ export default function AdmissionsPage() {
 
                 </motion.div>
               </AnimatePresence>
+
+              {/* Submit Error Message */}
+              {submitError && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-6 rounded-xl bg-red-500/10 border border-red-500/20 p-4 flex items-start gap-3"
+                >
+                  <div className="rounded-full bg-red-500/20 p-1 mt-0.5">
+                    <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-red-400">Submission Failed</h4>
+                    <p className="text-sm text-slate-300 mt-1">{submitError}</p>
+                  </div>
+                </motion.div>
+              )}
 
               {/* Navigation buttons */}
               <div className="flex items-center justify-between border-t border-white/5 pt-6 mt-8">

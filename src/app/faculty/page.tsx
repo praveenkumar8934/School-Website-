@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
+import { fallbackFaculty } from "@/lib/facultyData";
 
 export const revalidate = 60;
 
@@ -30,8 +31,36 @@ export default async function FacultyPage() {
         </div>
 
         {(!faculty || faculty.length === 0) ? (
-          <div className="text-center py-20 text-slate-500">
-            <p className="text-xl">No faculty members found.</p>
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {fallbackFaculty.map((member: any, index: number) => {
+              const hue = member.hue || (index * 45) % 360;
+              return (
+                <div key={member.name} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-200 transition-all duration-300 hover:shadow-lg hover:-translate-y-2 group">
+                  <div 
+                    className="h-32 relative overflow-hidden"
+                    style={{ backgroundImage: `linear-gradient(135deg, hsl(${hue} 70% 60%), hsl(${hue} 60% 40%))` }}
+                  >
+                    <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors duration-300" />
+                    <div className="absolute -bottom-10 left-6">
+                      <div className="w-20 h-20 bg-white rounded-2xl p-1 shadow-sm rotate-3 group-hover:rotate-0 transition-transform duration-300">
+                        <div className="w-full h-full bg-slate-100 rounded-xl flex items-center justify-center text-2xl font-bold text-slate-400">
+                          {member.name.charAt(0)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="pt-14 pb-6 px-6">
+                    <h3 className="font-bold text-xl text-slate-900 line-clamp-1 group-hover:text-blue-600 transition-colors">{member.name}</h3>
+                    <p className="text-sm font-medium text-blue-600 mt-1">{member.role}</p>
+                    
+                    <div className="mt-5 text-sm text-slate-600 border-t border-slate-100 pt-4">
+                      <p className="font-medium text-slate-700">{member.exp}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

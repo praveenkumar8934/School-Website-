@@ -244,7 +244,6 @@ export default function StudentDashboard() {
   }, [router]);
 
   const handleSignOut = async () => {
-    if (!confirm("Are you sure you want to sign out?")) return;
     setSigningOut(true);
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
@@ -785,13 +784,16 @@ export default function StudentDashboard() {
               ════════════════════════════════════ */}
               {activeSection === "fees" && (() => {
                 let details = student.feeDetails;
+                if (typeof details === "string") {
+                  try { details = JSON.parse(details); } catch(e) {}
+                }
 
                 // Fallback for students who don't have fee_details generated yet
                 if (!details && student.grade && student.grade !== "—") {
                   details = generateInstallments(student.grade);
                 }
 
-                if (!details) {
+                if (!details || !details.installments) {
                   return (
                     <div className="space-y-5">
                       <div className="rounded-2xl border border-white/5 bg-white/5 p-10 flex flex-col items-center justify-center text-center">

@@ -3,9 +3,13 @@ import type { NextRequest } from 'next/server';
 import { updateSession } from '@/utils/supabase/middleware';
 import { jwtVerify } from 'jose';
 
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'fallback_secret_for_development_only');
+const JWT_SECRET_STRING = process.env.JWT_SECRET;
+if (!JWT_SECRET_STRING) {
+  throw new Error('JWT_SECRET is not set in environment variables');
+}
+const JWT_SECRET = new TextEncoder().encode(JWT_SECRET_STRING);
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { supabaseResponse, user } = await updateSession(request);
   const { pathname } = request.nextUrl;
 

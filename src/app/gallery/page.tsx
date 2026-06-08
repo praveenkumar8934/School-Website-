@@ -6,7 +6,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
-import { createClient } from "@supabase/supabase-js";
 
 // Fallback static images if DB is empty or fails
 const fallbackImages = [
@@ -22,9 +21,9 @@ const fallbackImages = [
   { title: "Music Room", hue: "300", span: "col-span-1 md:col-span-2 row-span-1", image_url: "" },
 ];
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { createClient } from "@/utils/supabase/client";
+
+const supabase = createClient();
 
 export default function GalleryPage() {
   const [galleryImages, setGalleryImages] = useState<any[]>(fallbackImages);

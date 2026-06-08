@@ -10,13 +10,11 @@ import {
   Calendar, FileText, ChevronDown, ChevronUp, Pencil, Save, Lock, FileQuestion, Plus, Trash2, Edit3
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "@/utils/supabase/client";
 import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from "recharts";
 import OnlineTestsView from "@/components/OnlineTestsView";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = createClient();
 
 const getPrefix = (gender?: string) => {
   if (gender === "Male") return "Mr.";
@@ -100,6 +98,7 @@ export default function TeacherDashboard() {
   const [selectedStudent, setSelectedStudent] = useState<any | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [profileError, setProfileError] = useState(false);
   
   // Dynamic States
   const [teacher, setTeacher] = useState(defaultTeacherMock);
@@ -134,6 +133,12 @@ export default function TeacherDashboard() {
         }
         const data = await res.json();
         const session = data.user;
+        
+        if (!session || session.role !== "faculty") {
+          router.push("/login?redirect=/teacher-dashboard");
+          return;
+        }
+        
         setIsAuthenticated(true);
         fetchTeacherData(session.facultyId || session.id, session);
       })
@@ -181,6 +186,8 @@ export default function TeacherDashboard() {
               setClassStudents(formattedStudents);
             }
           }
+        } else {
+          setProfileError(true);
         }
 
         // Fetch Timetable (if implemented)
@@ -374,7 +381,6 @@ export default function TeacherDashboard() {
   );
 
   const handleSignOut = async () => {
-    if (!confirm("Are you sure you want to sign out?")) return;
     setSigningOut(true);
     try {
       await fetch("/api/auth/logout", { method: "POST" });
@@ -525,6 +531,18 @@ export default function TeacherDashboard() {
     );
   }
 
+  if (profileError) {
+    return (
+      <div className="min-h-screen bg-[#0a1628] flex flex-col items-center justify-center text-white p-6">
+        <XCircle className="w-16 h-16 text-red-500 mb-6" />
+        <h1 className="text-3xl font-bold font-heading mb-2">Access Denied</h1>
+        <p className="text-slate-400 max-w-md text-center">Your faculty profile could not be found or you do not have permission to access the Teacher Dashboard.</p>
+        <button onClick={() => {
+          handleSignOut();
+        }} className="mt-8 px-6 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg font-bold transition">Sign Out</button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-[#0a1628] text-slate-100 font-sans">

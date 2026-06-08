@@ -8,7 +8,8 @@ import { btn, input } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mail, MapPin, Phone, Send, CheckCircle } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useEffect } from "react";
+import { ShieldAlert } from "lucide-react";
 
 const contactItems = [
   { icon: MapPin, text: "1200 Nova Drive, Austin, TX 78701" },
@@ -32,27 +33,61 @@ export function Contact() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [focused, setFocused] = useState<string | null>(null);
+  const [captcha, setCaptcha] = useState<{question: string; token: string} | null>(null);
+  const [securityAnswer, setSecurityAnswer] = useState("");
+
+  const generateCaptcha = async () => {
+    try {
+      const res = await fetch("/api/auth/captcha");
+      const data = await res.json();
+      setCaptcha(data);
+      setSecurityAnswer("");
+    } catch (err) {
+      console.error("Failed to load captcha");
+    }
+  };
+
+  useEffect(() => {
+    generateCaptcha();
+  }, []);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     const formData = new FormData(form);
     
+    if (!securityAnswer) {
+      setError("Please solve the captcha.");
+      return;
+    }
+    
     setSubmitting(true);
     setError(null);
     try {
+      const payload = {
+        ...Object.fromEntries(formData.entries()),
+        securityAnswer,
+        captchaToken: captcha?.token
+      };
+
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(Object.fromEntries(formData.entries())),
+        body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error("Failed to send message");
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to send message");
+      }
       setSubmitted(true);
       form.reset();
+      setSecurityAnswer("");
+      generateCaptcha();
       setTimeout(() => setSubmitted(false), 5000);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Contact error:", err);
-      setError("Failed to send message. Please try again.");
+      setError(err.message || "Failed to send message. Please try again.");
+      generateCaptcha();
     } finally {
       setSubmitting(false);
     }
@@ -228,6 +263,34 @@ export function Contact() {
                 className={cn(fieldClass(focused === "message"), "resize-none")}
               />
             </label>
+
+            <div className="mt-5 rounded-xl border border-white/10 bg-slate-900/5 p-4">
+              <label className="block">
+                <span className="text-xs font-semibold uppercase tracking-wider text-foreground-muted">
+                  Security Check *
+                </span>
+                <div className="mt-2 flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="flex items-center gap-3 bg-slate-900 border border-white/10 rounded-lg px-4 py-2 shadow-inner">
+                    <ShieldAlert className="h-5 w-5 text-blue-400" />
+                    <span className="font-mono text-lg font-bold text-white tracking-widest">
+                      {captcha ? captcha.question : "Loading..."}
+                    </span>
+                  </div>
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      required
+                      value={securityAnswer}
+                      onChange={(e) => setSecurityAnswer(e.target.value)}
+                      placeholder="Enter answer"
+                      className={cn(fieldClass(focused === "securityAnswer"), "w-full")}
+                      onFocus={() => setFocused("securityAnswer")}
+                      onBlur={() => setFocused(null)}
+                    />
+                  </div>
+                </div>
+              </label>
+            </div>
 
             {error && (
               <div className="mt-4 p-3 bg-red-100 text-red-700 text-sm rounded-lg border border-red-200">
